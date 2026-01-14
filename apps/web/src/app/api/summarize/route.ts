@@ -1,9 +1,31 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import { db } from "@/db";
-import { sessions, summaries, transcripts } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { sessions, summaries, transcripts } from "@/db/schema";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseSessionId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
 
 export async function POST(req: Request) {
   if (req.headers.get("x-bot-secret") !== process.env.BOT_SECRET) {
@@ -11,7 +33,9 @@ export async function POST(req: Request) {
   }
 
   const payload = await req.json().catch(() => null);
-  const sessionId = Number(payload?.sessionId);
+  const sessionId = isRecord(payload)
+    ? parseSessionId(payload.sessionId)
+    : null;
 
   if (!sessionId) {
     return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
@@ -27,13 +51,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Empty session" }, { status: 400 });
   }
 
-  const script = lines.map((line) => `${line.speaker}: ${line.content}`).join("\n");
+  const script = lines
+    .map(
+      (line: typeof transcripts.$inferSelect) =>
+        `${line.speaker}: ${line.content}`,
+    )
+    .join("\n");
 
   const { text } = await generateText({
     model: openai("gpt-4o"),
     system:
       "You are a D&D scribe. Summarize the session with sections for Plot, Combat, and Loot.",
-    prompt: `TRANSCRIPT:\n${script}`
+    prompt: `TRANSCRIPT:\n${script}`,
   });
 
   await db.insert(summaries).values({ sessionId, text });
