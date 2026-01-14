@@ -16,7 +16,10 @@ const alegreya = Alegreya({
 
 export const metadata: Metadata = {
   title: "DND Scribe",
-  description: "Live transcription and summaries for tabletop sessions."
+  description: "Live transcription and summaries for tabletop sessions.",
+  icons: {
+    icon: "/favicon.ico"
+  }
 };
 
 export default function RootLayout({
