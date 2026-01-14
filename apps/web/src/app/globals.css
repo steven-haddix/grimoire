@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #fff6e8 0%, #f5f1e8 45%, #efe6da 100%);
+  color: #2a211b;
+  font-family: var(--font-alegreya), "Iowan Old Style", serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-cinzel), "Times New Roman", serif;
+  letter-spacing: 0.02em;
+}

@@ -1,0 +1,10 @@
+app = "dnd-scribe-bot"
+primary_region = "iad"
+
+[env]
+  NODE_ENV = "production"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
