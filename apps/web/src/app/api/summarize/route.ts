@@ -1,4 +1,4 @@
-import { openai } from "@ai-sdk/openai";
+import { type GoogleGenerativeAIProviderOptions, google } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -59,10 +59,18 @@ export async function POST(req: Request) {
     .join("\n");
 
   const { text } = await generateText({
-    model: openai("gpt-4o"),
+    model: google("gemini-3-flash"),
     system:
       "You are a D&D scribe. Summarize the session with sections for Plot, Combat, and Loot.",
     prompt: `TRANSCRIPT:\n${script}`,
+    providerOptions: {
+      google: {
+        thinkingConfig: {
+          thinkingLevel: "high",
+          includeThoughts: true,
+        },
+      } satisfies GoogleGenerativeAIProviderOptions,
+    },
   });
 
   await db.insert(summaries).values({ sessionId, text });

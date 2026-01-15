@@ -29,6 +29,7 @@ const client = new Client({
 
 const deepgram = createClient(DEEPGRAM_API_KEY);
 const sessionMap = new Map<string, number>();
+const activeUserStreams = new Set<string>();
 
 client.once(Events.ClientReady, () => {
   console.log("🐲 DND Scribe bot online (Deepgram Nova-3)");
@@ -39,6 +40,12 @@ client.on(Events.MessageCreate, async (msg) => {
   if (!msg.guild || msg.author.bot) return;
 
   if (msg.content === "!scribe start" && msg.member?.voice.channel) {
+    const existingConnection = getVoiceConnection(msg.guild.id);
+    if (existingConnection) {
+      await msg.reply("🟡 Already listening here. Use `!scribe stop` first.");
+      return;
+    }
+
     const channel = msg.member.voice.channel;
 
     const connection = joinVoiceChannel({
@@ -74,7 +81,13 @@ client.on(Events.MessageCreate, async (msg) => {
           throw new Error("Guild not found while starting speaker processing");
         }
         const sessionId = sessionMap.get(msg.guild?.id);
-        if (sessionId) processStream(connection, userId, sessionId);
+        if (!sessionId) return;
+
+        const streamKey = `${msg.guild.id}:${userId}`;
+        if (activeUserStreams.has(streamKey)) return;
+
+        activeUserStreams.add(streamKey);
+        processStream(connection, userId, sessionId, streamKey);
       });
     } catch (error) {
       console.error(error);
@@ -88,6 +101,11 @@ client.on(Events.MessageCreate, async (msg) => {
 
     if (connection) {
       connection.destroy();
+      for (const key of activeUserStreams) {
+        if (key.startsWith(`${msg.guild.id}:`)) {
+          activeUserStreams.delete(key);
+        }
+      }
 
       if (sessionId) {
         await msg.reply("🛑 Session ended. Summarizing...");
@@ -111,6 +129,7 @@ function processStream(
   connection: ReturnType<typeof joinVoiceChannel>,
   userId: string,
   sessionId: number,
+  streamKey: string,
 ) {
   const opusStream = connection.receiver.subscribe(userId, {
     end: {
@@ -118,6 +137,13 @@ function processStream(
       duration: 1000,
     },
   });
+
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    activeUserStreams.delete(streamKey);
+  };
 
   const dgLive = deepgram.listen.live({
     model: "nova-3",
@@ -139,6 +165,7 @@ function processStream(
     });
 
     opusStream.on("end", () => {
+      cleanup();
       try {
         dgLive.finish();
       } catch {}
@@ -146,6 +173,7 @@ function processStream(
 
     opusStream.on("error", (err) => {
       console.error("Opus stream error", err);
+      cleanup();
       try {
         dgLive.finish();
       } catch {}
@@ -177,6 +205,7 @@ function processStream(
 
   dgLive.on(LiveTranscriptionEvents.Error, (error) => {
     console.error("Deepgram error", error);
+    cleanup();
     try {
       dgLive.finish();
     } catch {}
