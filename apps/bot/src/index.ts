@@ -132,10 +132,16 @@ function processStream(
   streamKey: string,
 ) {
   const opusStream = connection.receiver.subscribe(userId, {
-    end: {
-      behavior: EndBehaviorType.AfterSilence,
-      duration: 1000,
-    },
+    end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 },
+  });
+
+  const dgLive = deepgram.listen.live({
+    model: "nova-3",
+    smart_format: true,
+    encoding: "opus",
+    sample_rate: 48000,
+    channels: 2,
+    language: "en-US",
   });
 
   let cleanedUp = false;
@@ -143,52 +149,40 @@ function processStream(
     if (cleanedUp) return;
     cleanedUp = true;
     activeUserStreams.delete(streamKey);
+    try {
+      opusStream.destroy();
+    } catch {}
+    try {
+      dgLive.requestClose();
+    } catch {}
   };
 
-  const dgLive = deepgram.listen.live({
-    model: "nova-3",
-    smart_format: true,
-    // 👇 key change: tell Deepgram we’re sending raw opus packets
-    encoding: "opus",
-    sample_rate: 48000,
-    channels: 2,
-    language: "en-US",
-  });
+  const onData = (chunk: any) => {
+    try {
+      dgLive.send(chunk);
+    } catch (err) {
+      console.error("Deepgram send failed", err);
+      cleanup();
+    }
+  };
 
   dgLive.on(LiveTranscriptionEvents.Open, () => {
-    opusStream.on("data", (opusChunk) => {
-      try {
-        dgLive.send(opusChunk);
-      } catch (err) {
-        console.error("Deepgram send failed", err);
-      }
-    });
-
-    opusStream.on("end", () => {
-      cleanup();
-      try {
-        dgLive.finish();
-      } catch {}
-    });
-
-    opusStream.on("error", (err) => {
+    opusStream.on("data", onData);
+    opusStream.once("end", cleanup);
+    opusStream.once("error", (err) => {
       console.error("Opus stream error", err);
       cleanup();
-      try {
-        dgLive.finish();
-      } catch {}
     });
   });
 
   dgLive.on(LiveTranscriptionEvents.Transcript, async (data) => {
     if (!data.is_final) return;
-
     const text = data.channel.alternatives?.[0]?.transcript ?? "";
     if (!text.trim()) return;
 
     const user = client.users.cache.get(userId);
 
-    await fetch(`${apiBase}/ingest`, {
+    fetch(`${apiBase}/ingest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -206,10 +200,10 @@ function processStream(
   dgLive.on(LiveTranscriptionEvents.Error, (error) => {
     console.error("Deepgram error", error);
     cleanup();
-    try {
-      dgLive.finish();
-    } catch {}
   });
+
+  // If supported by your SDK version:
+  dgLive.on(LiveTranscriptionEvents.Close, cleanup);
 }
 
 client.login(DISCORD_TOKEN);

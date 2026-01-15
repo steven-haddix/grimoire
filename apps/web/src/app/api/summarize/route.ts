@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     .join("\n");
 
   const { text } = await generateText({
-    model: google("gemini-3-flash"),
+    model: google("gemini-3-flash-preview"),
     system:
       "You are a D&D scribe. Summarize the session with sections for Plot, Combat, and Loot.",
     prompt: `TRANSCRIPT:\n${script}`,
