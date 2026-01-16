@@ -1,4 +1,5 @@
 import { Mic2, ScrollText, Sparkles } from "lucide-react";
+import { HomeAuthControls } from "@/components/home-auth-controls";
 
 const features = [
   {
@@ -32,6 +33,7 @@ export default function Home() {
           <p className="inline-flex items-center gap-2 rounded-full border border-ember/40 bg-white/80 px-4 py-1 text-sm uppercase tracking-[0.28em] text-ember shadow-glow">
             DND Scribe
           </p>
+          <HomeAuthControls />
           <h1 className="max-w-3xl text-4xl font-semibold leading-tight text-ink md:text-6xl">
             Capture every dramatic pause, twist, and critical hit from your table.
           </h1>
