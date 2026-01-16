@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { DiscordSignInButton } from "@/components/auth/discord-sign-in-button";
 import { authClient } from "@/lib/auth/client";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function HomeAuthControls() {
   const router = useRouter();
@@ -12,9 +14,9 @@ export function HomeAuthControls() {
 
   if (isPending) {
     return (
-      <div className="flex items-center gap-3 text-sm text-ink/70">
-        <span className="h-9 w-24 animate-pulse rounded-lg bg-white/70" />
-        <span className="h-9 w-24 animate-pulse rounded-lg bg-white/70" />
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-9 w-24 rounded-lg" />
+        <Skeleton className="h-9 w-24 rounded-lg" />
       </div>
     );
   }
@@ -22,7 +24,7 @@ export function HomeAuthControls() {
   if (!session) {
     return (
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <DiscordSignInButton className="rounded-lg bg-ember px-4 py-2 font-semibold shadow-glow transition hover:bg-ember/90">
+        <DiscordSignInButton className="font-semibold shadow-glow">
           Continue with Discord
         </DiscordSignInButton>
       </div>
@@ -36,27 +38,29 @@ export function HomeAuthControls() {
     "Signed in";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white/70 px-4 py-3 text-sm">
-      <div className="min-w-0 text-ink/80">
-        Signed in as <span className="font-semibold text-ink">{label}</span>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3 text-sm shadow-sm">
+      <div className="min-w-0 text-muted-foreground">
+        Signed in as <span className="font-semibold text-foreground">{label}</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Link
-          href="/account"
-          className="rounded-lg border border-ink/15 bg-white/70 px-4 py-2 font-semibold text-ink transition hover:bg-white"
-        >
-          Account
-        </Link>
-        <button
-          type="button"
-          className="rounded-lg bg-ink px-4 py-2 font-semibold text-white transition hover:bg-ink/90"
+        <Button variant="outline" asChild className="bg-background/50">
+          <Link href="/account">Account</Link>
+        </Button>
+        <Button
+          variant="default" // Using primary (ember) for sign out if desired, or secondary? Original was bg-ink (black/brown).
+          // Actually, let's use 'secondary' for sign out to be less aggressive than 'primary' (ember), 
+          // or 'ghost'. The original was bg-ink, which is effectively "primary" in some themes, but our primary is Ember.
+          // Let's stick to the theme: Primary = Action. Sign Out is an action.
+          // But maybe we want it less prominent?
+          // Let's use 'secondary' for now.
+          className="bg-foreground text-background hover:bg-foreground/90" // Custom override to match original "ink" button
           onClick={async () => {
             await authClient.signOut();
             router.refresh();
           }}
         >
           Sign out
-        </button>
+        </Button>
       </div>
     </div>
   );
