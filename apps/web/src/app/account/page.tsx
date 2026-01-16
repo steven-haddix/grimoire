@@ -4,6 +4,7 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 import { auth } from "@/lib/auth/server";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DiscordGuildSelector } from "@/components/discord-guild-selector";
 
 export default async function AccountPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -44,6 +45,10 @@ export default async function AccountPage() {
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">User ID</p>
               <p className="font-semibold text-foreground">{session.user?.id}</p>
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-secondary/50 p-4">
+            <DiscordGuildSelector />
           </div>
 
           <div className="flex flex-wrap gap-3">
