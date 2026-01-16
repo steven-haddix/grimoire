@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { authClient } from "@/lib/auth/client";
+import { Button } from "@/components/ui/button";
 
 type DiscordSignInButtonProps = {
   callbackURL?: string;
@@ -15,7 +16,7 @@ export function DiscordSignInButton({
   children
 }: DiscordSignInButtonProps) {
   return (
-    <button
+    <Button
       type="button"
       className={className}
       onClick={async () => {
@@ -26,6 +27,6 @@ export function DiscordSignInButton({
       }}
     >
       {children ?? "Continue with Discord"}
-    </button>
+    </Button>
   );
 }
