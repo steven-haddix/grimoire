@@ -1,6 +1,5 @@
-import { auth } from "@/lib/auth/server";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +7,7 @@ export const dynamic = "force-dynamic";
 // (Discord returns `permissions` in the guild list response.)
 const hasAdminPerms = (permissions: string) => {
   const p = BigInt(permissions);
-  const ADMIN = 0x8n;        // Administrator
+  const ADMIN = 0x8n; // Administrator
   const MANAGE_GUILD = 0x20n; // Manage Guild
   return (p & ADMIN) !== 0n || (p & MANAGE_GUILD) !== 0n;
 };
@@ -28,7 +27,7 @@ export async function GET() {
     headers: await headers(),
   });
 
-  const accessToken = (tokenRes as any)?.accessToken;
+  const accessToken = tokenRes.accessToken;
   if (!accessToken) return new Response("No Discord token", { status: 400 });
 
   // Use Discord API: /users/@me/guilds requires the `guilds` scope
