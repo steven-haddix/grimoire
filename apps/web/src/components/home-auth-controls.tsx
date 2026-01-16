@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { DiscordSignInButton } from "@/components/auth/discord-sign-in-button";
 import { authClient } from "@/lib/auth/client";
 
 export function HomeAuthControls() {
   const router = useRouter();
-  const { data, isPending } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
 
   if (isPending) {
     return (
@@ -18,26 +19,21 @@ export function HomeAuthControls() {
     );
   }
 
-  if (!data?.session) {
+  if (!session) {
     return (
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <Link
-          href="/auth/sign-in"
-          className="rounded-lg bg-ember px-4 py-2 font-semibold text-white shadow-glow transition hover:bg-ember/90"
-        >
-          Sign in
-        </Link>
-        <Link
-          href="/auth/sign-up"
-          className="rounded-lg border border-ink/15 bg-white/70 px-4 py-2 font-semibold text-ink transition hover:bg-white"
-        >
-          Sign up
-        </Link>
+        <DiscordSignInButton className="rounded-lg bg-ember px-4 py-2 font-semibold shadow-glow transition hover:bg-ember/90">
+          Continue with Discord
+        </DiscordSignInButton>
       </div>
     );
   }
 
-  const label = data.user?.email ?? data.user?.name ?? data.user?.id ?? "Signed in";
+  const label =
+    session.user?.email ??
+    session.user?.name ??
+    session.user?.id ??
+    "Signed in";
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white/70 px-4 py-3 text-sm">
@@ -46,7 +42,7 @@ export function HomeAuthControls() {
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Link
-          href="/account/settings"
+          href="/account"
           className="rounded-lg border border-ink/15 bg-white/70 px-4 py-2 font-semibold text-ink transition hover:bg-white"
         >
           Account

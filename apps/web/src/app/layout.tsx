@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Alegreya, Cinzel } from "next/font/google";
-import { NeonAuthProvider } from "@/components/neon-auth-provider";
 import "./globals.css";
 
 const cinzel = Cinzel({
@@ -32,9 +31,7 @@ export default function RootLayout({
       className={`${cinzel.variable} ${alegreya.variable}`}
       suppressHydrationWarning
     >
-      <body className="text-ink antialiased">
-        <NeonAuthProvider>{children}</NeonAuthProvider>
-      </body>
+      <body className="text-ink antialiased">{children}</body>
     </html>
   );
 }

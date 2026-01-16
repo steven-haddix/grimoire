@@ -27,3 +27,5 @@ export const summaries = pgTable("summaries", {
 	text: text("text").notNull(),
 	createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export * from "./better-auth-schema";

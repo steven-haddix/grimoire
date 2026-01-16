@@ -1,9 +1,10 @@
-import { neonAuth } from "@neondatabase/auth/next/server";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function ServerRenderedPage() {
-  const { session, user } = await neonAuth();
+  const session = await auth.api.getSession({ headers: await headers() });
 
   return (
     <div className="mx-auto max-w-xl space-y-4 p-6">
@@ -16,14 +17,14 @@ export default async function ServerRenderedPage() {
         </span>
       </p>
 
-      {user && <p className="text-gray-400">User ID: {user.id}</p>}
+      {session?.user && <p className="text-gray-400">User ID: {session.user.id}</p>}
 
       <p className="font-medium text-gray-700 dark:text-gray-200">
         Session and User Data:
       </p>
 
       <pre className="overflow-x-auto rounded bg-gray-100 p-4 text-sm text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-        {JSON.stringify({ session, user }, null, 2)}
+        {JSON.stringify(session, null, 2)}
       </pre>
     </div>
   );

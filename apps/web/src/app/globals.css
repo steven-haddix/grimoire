@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "@neondatabase/auth/ui/tailwind";
 
 :root {
   color-scheme: light;

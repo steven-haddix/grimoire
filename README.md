@@ -26,6 +26,10 @@ Set env vars in `apps/web/.env` (see `apps/web/.env.example`):
 - `DATABASE_URL`
 - `OPENAI_API_KEY`
 - `BOT_SECRET`
+- `BETTER_AUTH_SECRET`
+- `BETTER_AUTH_URL`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_CLIENT_SECRET`
 
 Run migrations (from `apps/web`):
 
@@ -52,7 +56,8 @@ Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 
 ### Vercel
 - Deploy `apps/web`.
-- Add `DATABASE_URL`, `OPENAI_API_KEY`, `BOT_SECRET`.
+- Add `DATABASE_URL`, `OPENAI_API_KEY`, `BOT_SECRET`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
+  `DISCORD_CLIENT_ID`, and `DISCORD_CLIENT_SECRET`.
 
 ### Fly.io
 - From `apps/bot`, run `fly launch` (do not deploy yet).
