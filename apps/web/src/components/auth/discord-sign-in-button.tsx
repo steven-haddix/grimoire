@@ -22,7 +22,8 @@ export function DiscordSignInButton({
       onClick={async () => {
         await authClient.signIn.social({
           provider: "discord",
-          callbackURL
+          callbackURL,
+          scopes: ["identify", "email", "guilds"]
         });
       }}
     >
