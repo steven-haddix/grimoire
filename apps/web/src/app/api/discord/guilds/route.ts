@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth/server";
 import { headers } from "next/headers";
-import { requireSession } from "@/lib/require-session";
+import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 // Minimal perms check: treat “Admin OR Manage Guild” as portal admin
 // (Discord returns `permissions` in the guild list response.)
@@ -12,7 +14,13 @@ const hasAdminPerms = (permissions: string) => {
 };
 
 export async function GET() {
-  const session = await requireSession();
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session) {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   // Get a valid Discord user access token (refreshed if needed)
   const tokenRes = await auth.api.getAccessToken({
