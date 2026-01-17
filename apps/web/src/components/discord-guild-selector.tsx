@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { InstallBotButton } from "@/components/install-bot-button";
 
 interface Guild {
   id: string;
@@ -161,6 +162,11 @@ export function DiscordGuildSelector() {
               Check failed
             </Badge>
           )}
+        </div>
+      )}
+      {selectedGuild && installStatus === "not-installed" && (
+        <div className="grid gap-2">
+          <InstallBotButton guildId={selectedGuild} />
         </div>
       )}
     </div>

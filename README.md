@@ -30,6 +30,7 @@ Set env vars in `apps/web/.env` (see `apps/web/.env.example`):
 - `BETTER_AUTH_URL`
 - `DISCORD_CLIENT_ID`
 - `DISCORD_CLIENT_SECRET`
+- `NEXT_PUBLIC_DISCORD_APP_ID` (Discord Application ID)
 
 Run migrations (from `apps/web`):
 
@@ -58,7 +59,7 @@ Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 ### Vercel
 - Deploy `apps/web`.
 - Add `DATABASE_URL`, `OPENAI_API_KEY`, `BOT_SECRET`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
-  `DISCORD_CLIENT_ID`, and `DISCORD_CLIENT_SECRET`.
+  `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `NEXT_PUBLIC_DISCORD_APP_ID`.
 
 ### Fly.io
 - From `apps/bot`, run `fly launch` (do not deploy yet).
