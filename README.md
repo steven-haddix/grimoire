@@ -47,6 +47,12 @@ bun dev:bot
 Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 - `DISCORD_TOKEN`
 - `DEEPGRAM_API_KEY`
+- `TTS_PROVIDER` (optional; `deepgram`, `elevenlabs`, or `cartesia`)
+- `TTS_VOICE` (provider voice id/name)
+- `TTS_VOICE_OPTIONS` (optional JSON object string)
+- `ELEVENLABS_API_KEY` (if using ElevenLabs)
+- `CARTESIA_API_KEY` (if using Cartesia)
+- `CARTESIA_BASE_URL` (optional)
 - `NEXT_API_URL` (ex: `http://localhost:3000/api`)
 - `BOT_SECRET` (same as web)
 - `BOT_HTTP_PORT` (optional; defaults to `PORT` or `3001`)
@@ -69,6 +75,11 @@ Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 fly secrets set \
   DISCORD_TOKEN=... \
   DEEPGRAM_API_KEY=... \
+  TTS_PROVIDER=deepgram \
+  TTS_VOICE=aura-asteria-en \
+  ELEVENLABS_API_KEY=... \
+  CARTESIA_API_KEY=... \
+  CARTESIA_BASE_URL=https://api.cartesia.ai \
   NEXT_API_URL=https://your-vercel-app.com/api \
   BOT_SECRET=...
 ```
@@ -83,3 +94,4 @@ fly deploy
 
 - If `nova-3` is unavailable in your Deepgram plan or region, update the bot config to `model: "nova-2"`.
 - Discord message content intent must be enabled in your bot settings for `!scribe` commands.
+- TTS playback requires `ffmpeg` installed on the host/container.

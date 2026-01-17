@@ -6,6 +6,13 @@ import {
   joinVoiceChannel,
 } from "@discordjs/voice";
 import { Client, Events, GatewayIntentBits } from "discord.js";
+import {
+  TtsService,
+  createTtsProviderFromEnv,
+  getGuildSpeechQueue,
+  removeGuildSpeechQueue,
+  type TtsVoiceConfig,
+} from "./tts";
 
 const { DISCORD_TOKEN, DEEPGRAM_API_KEY, NEXT_API_URL, BOT_SECRET } =
   process.env;
@@ -33,6 +40,10 @@ const client = new Client({
 const deepgram = createClient(DEEPGRAM_API_KEY);
 const sessionMap = new Map<string, number>();
 const activeUserStreams = new Set<string>();
+
+const tts = new TtsService(createTtsProviderFromEnv(process.env));
+const defaultTtsVoice = process.env.TTS_VOICE ?? "aura-asteria-en";
+const defaultTtsVoiceOptions = parseVoiceOptions(process.env.TTS_VOICE_OPTIONS);
 
 async function postBotJson(path: string, payload: unknown) {
   const res = await fetch(`${apiBase}${path}`, {
@@ -89,6 +100,40 @@ async function isBotInstalled(guildId: string) {
   } catch {
     return false;
   }
+}
+
+function parseVoiceOptions(raw?: string): Record<string, unknown> | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch (error) {
+    console.warn("Invalid TTS_VOICE_OPTIONS JSON", error);
+  }
+  return undefined;
+}
+
+function buildVoiceConfig(voiceOverride?: string): TtsVoiceConfig {
+  return {
+    voice: voiceOverride ?? defaultTtsVoice,
+    options: defaultTtsVoiceOptions,
+  };
+}
+
+function parseSayArgs(args: string[]) {
+  if (args.length === 0) {
+    return { text: "", voice: buildVoiceConfig() };
+  }
+
+  if (args[0] === "--voice" && args[1]) {
+    const voice = args[1];
+    const text = args.slice(2).join(" ").trim();
+    return { text, voice: buildVoiceConfig(voice) };
+  }
+
+  return { text: args.join(" ").trim(), voice: buildVoiceConfig() };
 }
 
 client.once(Events.ClientReady, async () => {
@@ -173,7 +218,17 @@ client.on(Events.MessageCreate, async (msg) => {
   console.log(`Message from ${msg.author.username}: ${msg.content}`);
   if (!msg.guild || msg.author.bot) return;
 
-  if (msg.content === "!scribe start" && msg.member?.voice.channel) {
+  const content = msg.content.trim();
+  if (!content.startsWith("!scribe")) return;
+
+  const [_, command, ...args] = content.split(/\s+/);
+
+  if (command === "start") {
+    if (!msg.member?.voice.channel) {
+      await msg.reply("Join a voice channel first.");
+      return;
+    }
+
     const existingConnection = getVoiceConnection(msg.guild.id);
     if (existingConnection) {
       await msg.reply("🟡 Already listening here. Use `!scribe stop` first.");
@@ -190,6 +245,8 @@ client.on(Events.MessageCreate, async (msg) => {
       // Disable DAVE to avoid requiring the optional @snazzah/davey package.
       daveEncryption: false,
     });
+
+    getGuildSpeechQueue({ guildId: msg.guild.id, connection, tts });
 
     try {
       const res = await fetch(`${apiBase}/session/start`, {
@@ -214,7 +271,7 @@ client.on(Events.MessageCreate, async (msg) => {
         if (!msg.guild) {
           throw new Error("Guild not found while starting speaker processing");
         }
-        const sessionId = sessionMap.get(msg.guild?.id);
+        const sessionId = sessionMap.get(msg.guild.id);
         if (!sessionId) return;
 
         const streamKey = `${msg.guild.id}:${userId}`;
@@ -225,16 +282,19 @@ client.on(Events.MessageCreate, async (msg) => {
       });
     } catch (error) {
       console.error(error);
+      removeGuildSpeechQueue(msg.guild.id);
+      connection.destroy();
       await msg.reply("❌ Could not start session. Check the API.");
     }
   }
 
-  if (msg.content === "!scribe stop") {
+  if (command === "stop") {
     const connection = getVoiceConnection(msg.guild.id);
     const sessionId = sessionMap.get(msg.guild.id);
 
     if (connection) {
       connection.destroy();
+      removeGuildSpeechQueue(msg.guild.id);
       for (const key of activeUserStreams) {
         if (key.startsWith(`${msg.guild.id}:`)) {
           activeUserStreams.delete(key);
@@ -255,6 +315,28 @@ client.on(Events.MessageCreate, async (msg) => {
 
         sessionMap.delete(msg.guild.id);
       }
+    }
+  }
+
+  if (command === "say") {
+    const connection = getVoiceConnection(msg.guild.id);
+    if (!connection) {
+      await msg.reply("Start a session first with `!scribe start`.");
+      return;
+    }
+
+    const { text, voice } = parseSayArgs(args);
+    if (!text) {
+      await msg.reply("Usage: `!scribe say <text>` or `!scribe say --voice <id> <text>`");
+      return;
+    }
+
+    const queue = getGuildSpeechQueue({ guildId: msg.guild.id, connection, tts });
+    try {
+      await queue.speak(text, voice);
+    } catch (error) {
+      console.error("TTS failed", error);
+      await msg.reply("❌ TTS failed. Check logs and provider config.");
     }
   }
 });
