@@ -1,4 +1,11 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import {
+	boolean,
+	integer,
+	pgTable,
+	serial,
+	text,
+	timestamp,
+} from "drizzle-orm/pg-core";
 
 export const sessions = pgTable("sessions", {
 	id: serial("id").primaryKey(),
@@ -7,6 +14,12 @@ export const sessions = pgTable("sessions", {
 	status: text("status").notNull().default("active"),
 	startedAt: timestamp("started_at").notNull().defaultNow(),
 	endedAt: timestamp("ended_at"),
+});
+
+export const guildInstallations = pgTable("guild_installations", {
+	guildId: text("guild_id").primaryKey(),
+	installed: boolean("installed").notNull().default(false),
+	checkedAt: timestamp("checked_at").notNull().defaultNow(),
 });
 
 export const transcripts = pgTable("transcripts", {

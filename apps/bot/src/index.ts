@@ -17,6 +17,8 @@ if (!DISCORD_TOKEN || !DEEPGRAM_API_KEY || !NEXT_API_URL || !BOT_SECRET) {
 }
 
 const apiBase = NEXT_API_URL.replace(/\/$/, "");
+const botServerPortRaw = process.env.BOT_HTTP_PORT ?? process.env.PORT ?? "3001";
+const botServerPort = Number.parseInt(botServerPortRaw, 10);
 
 const client = new Client({
   intents: [
@@ -31,8 +33,49 @@ const deepgram = createClient(DEEPGRAM_API_KEY);
 const sessionMap = new Map<string, number>();
 const activeUserStreams = new Set<string>();
 
+async function isBotInstalled(guildId: string) {
+  try {
+    await client.guilds.fetch(guildId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 client.once(Events.ClientReady, () => {
   console.log("🐲 DND Scribe bot online (Deepgram Nova-3)");
+});
+
+if (Number.isNaN(botServerPort)) {
+  throw new Error("Invalid BOT_HTTP_PORT/PORT value");
+}
+
+Bun.serve({
+  port: botServerPort,
+  async fetch(req) {
+    const url = new URL(req.url);
+    const match = url.pathname.match(/^\/guilds\/([^/]+)\/installed$/);
+
+    if (req.method !== "GET" || !match) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    if (req.headers.get("x-bot-secret") !== BOT_SECRET) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    if (!client.isReady()) {
+      return new Response("Bot not ready", { status: 503 });
+    }
+
+    const guildId = match[1];
+    const installed = await isBotInstalled(guildId);
+
+    return new Response(JSON.stringify({ installed }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  },
 });
 
 client.on(Events.MessageCreate, async (msg) => {

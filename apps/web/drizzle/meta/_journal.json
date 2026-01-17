@@ -15,6 +15,13 @@
       "when": 1768541741639,
       "tag": "0001_premium_doctor_faustus",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768617465857,
+      "tag": "0002_shocking_bloodstrike",
+      "breakpoints": true
     }
   ]
 }
