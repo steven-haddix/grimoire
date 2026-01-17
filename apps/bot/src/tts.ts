@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import {
   AudioPlayerStatus,
-  StreamType,
   createAudioPlayer,
   createAudioResource,
+  StreamType,
   type VoiceConnection,
 } from "@discordjs/voice";
 
@@ -103,23 +103,28 @@ export class ElevenLabsTtsProvider implements TtsProvider {
     opts?: { signal?: AbortSignal },
   ): Promise<{ stream: Readable; contentType: string }> {
     const voiceId = req.voice.voice;
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: "POST",
-      headers: {
-        "xi-api-key": this.apiKey,
-        "Content-Type": "application/json",
-        Accept: "audio/mpeg",
+    const res = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": this.apiKey,
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text: req.text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: req.voice.options ?? undefined,
+        }),
+        signal: opts?.signal,
       },
-      body: JSON.stringify({
-        text: req.text,
-        model_id: "eleven_multilingual_v2",
-        voice_settings: req.voice.options ?? undefined,
-      }),
-      signal: opts?.signal,
-    });
+    );
 
     if (!res.ok) {
-      throw new Error(`ElevenLabs TTS failed: ${res.status} ${await res.text()}`);
+      throw new Error(
+        `ElevenLabs TTS failed: ${res.status} ${await res.text()}`,
+      );
     }
 
     const contentType = res.headers.get("content-type") ?? "audio/mpeg";
@@ -165,24 +170,49 @@ export class DeepgramTtsProvider implements TtsProvider {
 
 export class CartesiaTtsProvider implements TtsProvider {
   readonly name: TtsProviderName = "cartesia";
-  constructor(private apiKey: string, private baseUrl = "https://api.cartesia.ai") {}
+
+  constructor(
+    private apiKey: string,
+    private baseUrl = "https://api.cartesia.ai",
+    private version = process.env.CARTESIA_VERSION ?? "2025-04-16",
+    private modelId = process.env.CARTESIA_MODEL_ID ?? "sonic-3",
+  ) {}
 
   async synthesize(
     req: TtsRequest,
     opts?: { signal?: AbortSignal },
   ): Promise<{ stream: Readable; contentType: string }> {
-    const res = await fetch(`${this.baseUrl}/tts`, {
+    const url = new URL("/tts/bytes", this.baseUrl);
+
+    const body = {
+      model_id: this.modelId,
+      transcript: req.text,
+      voice: { mode: "id", id: req.voice.voice },
+      language: (req.language ?? "en") as string,
+      output_format: {
+        container: "wav",
+        encoding: "pcm_s16le",
+        sample_rate: 48000,
+      },
+      // optional knobs (safe defaults)
+      generation_config: {
+        volume: 1,
+        speed: 1,
+        emotion: "neutral",
+      },
+    };
+
+    const res = await fetch(url.toString(), {
       method: "POST",
       headers: {
+        // Docs show X-API-Key in the get-started guide and Authorization in API ref; this works broadly:
+        "X-API-Key": this.apiKey,
         Authorization: `Bearer ${this.apiKey}`,
+        "Cartesia-Version": this.version,
         "Content-Type": "application/json",
         Accept: "audio/wav",
       },
-      body: JSON.stringify({
-        text: req.text,
-        voice: req.voice.voice,
-        ...((req.voice.options ?? {}) as object),
-      }),
+      body: JSON.stringify(body),
       signal: opts?.signal,
     });
 
@@ -230,7 +260,10 @@ export function createTtsProviderFromEnv(
   if (provider === "cartesia") {
     const key = env.CARTESIA_API_KEY;
     if (!key) throw new Error("Missing CARTESIA_API_KEY");
-    return new CartesiaTtsProvider(key, env.CARTESIA_BASE_URL ?? "https://api.cartesia.ai");
+    return new CartesiaTtsProvider(
+      key,
+      env.CARTESIA_BASE_URL ?? "https://api.cartesia.ai",
+    );
   }
 
   const key = env.DEEPGRAM_API_KEY;
@@ -320,7 +353,9 @@ export class GuildSpeechQueue {
             { text: job.text, voice: job.voice },
             { signal: ac.signal },
           );
-          const resource = createAudioResource(pcm, { inputType: StreamType.Raw });
+          const resource = createAudioResource(pcm, {
+            inputType: StreamType.Raw,
+          });
 
           await new Promise<void>((resolve, reject) => {
             const onIdle = () => {
@@ -368,7 +403,9 @@ export function getGuildSpeechQueue(params: {
     return existing;
   }
 
-  const queue = new GuildSpeechQueue(params.connection, params.tts, { maxQueue: 50 });
+  const queue = new GuildSpeechQueue(params.connection, params.tts, {
+    maxQueue: 50,
+  });
   speechQueues.set(params.guildId, queue);
   return queue;
 }
