@@ -22,6 +22,20 @@
       "when": 1768617465857,
       "tag": "0002_shocking_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1768619463272,
+      "tag": "0003_fat_power_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1768619558049,
+      "tag": "0004_condemned_nightcrawler",
+      "breakpoints": true
     }
   ]
 }

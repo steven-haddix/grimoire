@@ -1,0 +1,1 @@
+DROP TABLE "guild_installations" CASCADE;

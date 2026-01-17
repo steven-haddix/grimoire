@@ -17,7 +17,8 @@ if (!DISCORD_TOKEN || !DEEPGRAM_API_KEY || !NEXT_API_URL || !BOT_SECRET) {
 }
 
 const apiBase = NEXT_API_URL.replace(/\/$/, "");
-const botServerPortRaw = process.env.BOT_HTTP_PORT ?? process.env.PORT ?? "3001";
+const botServerPortRaw =
+  process.env.BOT_HTTP_PORT ?? process.env.PORT ?? "3001";
 const botServerPort = Number.parseInt(botServerPortRaw, 10);
 
 const client = new Client({
@@ -33,6 +34,54 @@ const deepgram = createClient(DEEPGRAM_API_KEY);
 const sessionMap = new Map<string, number>();
 const activeUserStreams = new Set<string>();
 
+async function postBotJson(path: string, payload: unknown) {
+  const res = await fetch(`${apiBase}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-bot-secret": BOT_SECRET,
+    } as Record<string, string>,
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const details = await res.text().catch(() => "");
+    throw new Error(
+      `Bot presence request failed (${res.status}): ${details || "No details"}`,
+    );
+  }
+}
+
+async function upsertGuildPresence(guild: {
+  id: string;
+  name: string;
+  icon: string | null;
+}) {
+  await postBotJson("/bot/guilds", {
+    guildId: guild.id,
+    name: guild.name,
+    icon: guild.icon ?? null,
+    installed: true,
+  });
+}
+
+async function markGuildRemoved(guildId: string) {
+  await postBotJson("/bot/guilds", {
+    guildId,
+    installed: false,
+  });
+}
+
+async function syncGuildPresence() {
+  const guilds = [...client.guilds.cache.values()].map((guild) => ({
+    guildId: guild.id,
+    name: guild.name,
+    icon: guild.icon ?? null,
+  }));
+
+  await postBotJson("/bot/guilds/sync", { guilds });
+}
+
 async function isBotInstalled(guildId: string) {
   try {
     await client.guilds.fetch(guildId);
@@ -42,8 +91,13 @@ async function isBotInstalled(guildId: string) {
   }
 }
 
-client.once(Events.ClientReady, () => {
+client.once(Events.ClientReady, async () => {
   console.log("🐲 DND Scribe bot online (Deepgram Nova-3)");
+  try {
+    await syncGuildPresence();
+  } catch (error) {
+    console.error("Guild presence sync failed", error);
+  }
 });
 
 if (Number.isNaN(botServerPort)) {
@@ -69,6 +123,11 @@ Bun.serve({
     }
 
     const guildId = match[1];
+
+    if (!guildId) {
+      return new Response("Bad Request", { status: 400 });
+    }
+
     const installed = await isBotInstalled(guildId);
 
     return new Response(JSON.stringify({ installed }), {
@@ -76,6 +135,38 @@ Bun.serve({
       headers: { "Content-Type": "application/json" },
     });
   },
+});
+
+client.on(Events.GuildCreate, async (guild) => {
+  try {
+    await upsertGuildPresence({
+      id: guild.id,
+      name: guild.name,
+      icon: guild.icon ?? null,
+    });
+  } catch (error) {
+    console.error("Guild presence upsert failed", error);
+  }
+});
+
+client.on(Events.GuildDelete, async (guild) => {
+  try {
+    await markGuildRemoved(guild.id);
+  } catch (error) {
+    console.error("Guild presence removal failed", error);
+  }
+});
+
+client.on(Events.GuildUpdate, async (_oldGuild, newGuild) => {
+  try {
+    await upsertGuildPresence({
+      id: newGuild.id,
+      name: newGuild.name,
+      icon: newGuild.icon ?? null,
+    });
+  } catch (error) {
+    console.error("Guild presence update failed", error);
+  }
 });
 
 client.on(Events.MessageCreate, async (msg) => {
@@ -200,6 +291,7 @@ function processStream(
     } catch {}
   };
 
+  // biome-ignore lint/suspicious/noExplicitAny: not typed
   const onData = (chunk: any) => {
     try {
       dgLive.send(chunk);
@@ -230,7 +322,7 @@ function processStream(
       headers: {
         "Content-Type": "application/json",
         "x-bot-secret": BOT_SECRET,
-      },
+      } as Record<string, string>,
       body: JSON.stringify({
         sessionId,
         speaker: user?.username ?? "Unknown",
