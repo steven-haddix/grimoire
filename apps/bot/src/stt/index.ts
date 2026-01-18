@@ -1,4 +1,4 @@
-import { DeepgramSttProvider } from "./deepgram";
+import { DeepgramSttProvider } from "./providers/deepgram";
 import type { SttProvider } from "./types";
 
 export type {

@@ -1,13 +1,26 @@
 import "dotenv/config";
 import { Client, GatewayIntentBits } from "discord.js";
-import { createBotApi } from "./api";
-import { createCommandRouter } from "./commands";
+import { createBotApi } from "./api/bot-api";
 import { loadConfig } from "./config";
-import { registerDiscordEvents } from "./events";
-import { startBotHttpServer } from "./server";
+import { createCommandRouter } from "./discord/commands";
+import { registerDiscordEvents } from "./discord/events";
+import { createVoiceManager } from "./discord/voice-manager";
+import { createBotController } from "./services/bot-controller";
+import { SttService } from "./services/stt-service";
+import { TranscriptionService } from "./services/transcription-service";
+import { TtsService } from "./services/tts-service";
+import { startBotHttpServer } from "./server/http";
 import { createSttProviderFromEnv } from "./stt";
-import { TtsService, createTtsProviderFromEnv } from "./tts";
-import { createVoiceManager } from "./voice";
+import { createTtsProviderFromEnv } from "./tts";
+
+const DEFAULT_STT_CONFIG = {
+  model: "nova-3",
+  smartFormat: true,
+  encoding: "opus",
+  sampleRate: 48000,
+  channels: 2,
+  language: "en-US",
+};
 
 const config = loadConfig(process.env);
 
@@ -20,11 +33,20 @@ const client = new Client({
   ],
 });
 
-const tts = new TtsService(createTtsProviderFromEnv(process.env));
-const stt = createSttProviderFromEnv(process.env);
 const api = createBotApi(config);
-const voice = createVoiceManager({ client, api, stt, tts });
-const commands = createCommandRouter({ config, api, voice, tts });
+const stt = new SttService(
+  createSttProviderFromEnv(process.env),
+  DEFAULT_STT_CONFIG,
+);
+const tts = new TtsService(createTtsProviderFromEnv(process.env));
+const transcription = new TranscriptionService(
+  stt,
+  { ingest: api.ingestTranscript },
+  (userId) => client.users.cache.get(userId)?.username,
+);
+const voice = createVoiceManager({ client, tts, transcription });
+const controller = createBotController({ config, api, voice, transcription });
+const commands = createCommandRouter({ controller });
 
 registerDiscordEvents({ client, api, commands });
 startBotHttpServer({ config, client });

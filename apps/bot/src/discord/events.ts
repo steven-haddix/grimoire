@@ -1,5 +1,5 @@
 import { type Client, Events } from "discord.js";
-import type { BotApi } from "./api";
+import type { BotApi } from "../api/bot-api";
 import type { CommandRouter } from "./commands";
 
 export function registerDiscordEvents(params: {

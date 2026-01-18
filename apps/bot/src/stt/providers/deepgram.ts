@@ -4,7 +4,7 @@ import type {
   SttStream,
   SttStreamHandlers,
   SttStreamParams,
-} from "./types";
+} from "../types";
 
 export class DeepgramSttProvider implements SttProvider {
   readonly name = "deepgram";

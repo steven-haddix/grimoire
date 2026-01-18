@@ -1,4 +1,4 @@
-import type { BotConfig } from "./config";
+import type { BotConfig } from "../config";
 
 export type AgentAction =
   | { type: "reply"; content: string }

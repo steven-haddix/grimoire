@@ -1,5 +1,5 @@
 import type { Client } from "discord.js";
-import type { BotConfig } from "./config";
+import type { BotConfig } from "../config";
 
 async function isBotInstalled(client: Client, guildId: string) {
   try {
