@@ -4,6 +4,7 @@ import type {
   Interaction,
   Message,
 } from "discord.js";
+import { MessageFlags } from "discord.js";
 import type { BotController } from "../services/bot-controller";
 import type { CommandContext, CommandIntent } from "../types";
 
@@ -54,9 +55,15 @@ export function createCommandRouter(params: {
         }
 
         if (interaction.deferred || interaction.replied) {
-          await interaction.followUp({ content, ephemeral: true });
+          await interaction.followUp({
+            content,
+            flags: MessageFlags.Ephemeral,
+          });
         } else {
-          await interaction.reply({ content, ephemeral: true });
+          await interaction.reply({
+            content,
+            flags: MessageFlags.Ephemeral,
+          });
         }
       },
     };
@@ -76,8 +83,7 @@ export function createCommandRouter(params: {
       intent = { type: "stop" };
     } else if (sub === "say") {
       const text = interaction.options.getString("text", true);
-      const voiceOverride =
-        interaction.options.getString("voice") ?? undefined;
+      const voiceOverride = interaction.options.getString("voice") ?? undefined;
       intent = { type: "say", text, voiceOverride };
     }
 
@@ -86,7 +92,7 @@ export function createCommandRouter(params: {
     if (intent.type === "say") {
       await interaction.reply({
         content: "🗣️ Speaking...",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       const ctx = buildInteractionContext(interaction, "followUp");
       await controller.handleIntent(intent, ctx);

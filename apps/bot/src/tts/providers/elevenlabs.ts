@@ -1,4 +1,4 @@
-import { Readable } from "node:stream";
+import { responseToNodeStream } from "../streaming";
 import type { TtsProvider, TtsProviderName, TtsRequest } from "../types";
 
 export class ElevenLabsTtsProvider implements TtsProvider {
@@ -35,7 +35,7 @@ export class ElevenLabsTtsProvider implements TtsProvider {
     }
 
     const contentType = res.headers.get("content-type") ?? "audio/mpeg";
-    const arrayBuf = await res.arrayBuffer();
-    return { stream: Readable.from(Buffer.from(arrayBuf)), contentType };
+    const stream = await responseToNodeStream(res);
+    return { stream, contentType };
   }
 }
