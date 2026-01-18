@@ -1,6 +1,6 @@
 import type { Readable } from "node:stream";
-import type { TtsProvider, TtsRequest } from "../tts/types";
 import { normalizeToDiscordPcm } from "../tts";
+import type { TtsProvider, TtsRequest } from "../tts/types";
 
 export class TtsService {
   constructor(private provider: TtsProvider) {}

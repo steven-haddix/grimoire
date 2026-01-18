@@ -1,7 +1,7 @@
 import type { Readable } from "node:stream";
 import type { SttStream } from "../stt";
 import type { SpeakerResolver, TranscriptSink } from "../types";
-import { SttService } from "./stt-service";
+import type { SttService } from "./stt-service";
 
 export class TranscriptionService {
   private sessionMap = new Map<string, number>();

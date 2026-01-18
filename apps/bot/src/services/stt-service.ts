@@ -25,6 +25,9 @@ export class SttService {
     handlers: SttStreamHandlers,
     params: SttStreamParams = {},
   ): SttStream {
-    return this.provider.createStream({ ...this.defaults, ...params }, handlers);
+    return this.provider.createStream(
+      { ...this.defaults, ...params },
+      handlers,
+    );
   }
 }

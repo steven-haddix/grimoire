@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { Readable } from "node:stream";
+import type { Readable } from "node:stream";
 import { CartesiaTtsProvider } from "./providers/cartesia";
 import { DeepgramTtsProvider } from "./providers/deepgram";
 import { ElevenLabsTtsProvider } from "./providers/elevenlabs";

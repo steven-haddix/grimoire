@@ -34,7 +34,7 @@ export function loadConfig(
     throw new Error(`Missing ${missing.join(", ")}`);
   }
 
-  const apiBase = env.NEXT_API_URL.replace(/\/$/, "");
+  const apiBase = env.NEXT_API_URL!.replace(/\/$/, "");
   const botServerPortRaw = env.BOT_HTTP_PORT ?? env.PORT ?? "3001";
   const botHttpPort = Number.parseInt(botServerPortRaw, 10);
 
@@ -46,9 +46,9 @@ export function loadConfig(
   const ttsVoiceOptions = parseVoiceOptions(env.TTS_VOICE_OPTIONS);
 
   return {
-    discordToken: env.DISCORD_TOKEN,
+    discordToken: env.DISCORD_TOKEN!,
     apiBase,
-    botSecret: env.BOT_SECRET,
+    botSecret: env.BOT_SECRET!,
     botHttpPort,
     ttsVoice,
     ttsVoiceOptions,

@@ -1,15 +1,15 @@
 import {
+  type DiscordGatewayAdapterCreator,
   EndBehaviorType,
   getVoiceConnection,
   joinVoiceChannel,
-  type DiscordGatewayAdapterCreator,
   type VoiceConnection,
 } from "@discordjs/voice";
 import type { Client } from "discord.js";
-import { getGuildSpeechQueue, removeGuildSpeechQueue } from "./audio-output";
-import type { TtsService } from "../services/tts-service";
 import type { TranscriptionService } from "../services/transcription-service";
+import type { TtsService } from "../services/tts-service";
 import type { VoiceGateway } from "../types";
+import { getGuildSpeechQueue, removeGuildSpeechQueue } from "./audio-output";
 
 function getAdapterCreator(
   client: Client,
