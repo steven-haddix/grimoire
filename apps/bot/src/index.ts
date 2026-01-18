@@ -4,6 +4,7 @@ import { createBotApi } from "./api/bot-api";
 import { loadConfig } from "./config";
 import { createCommandRouter } from "./discord/commands";
 import { registerDiscordEvents } from "./discord/events";
+import { registerSlashCommands } from "./discord/slash-commands";
 import { createVoiceManager } from "./discord/voice-manager";
 import { createBotController } from "./services/bot-controller";
 import { SttService } from "./services/stt-service";
@@ -49,6 +50,9 @@ const controller = createBotController({ config, api, voice, transcription });
 const commands = createCommandRouter({ controller });
 
 registerDiscordEvents({ client, api, commands });
+registerSlashCommands(config).catch((err) => {
+  console.error("Slash command registration failed", err);
+});
 startBotHttpServer({ config, client });
 
 client.login(config.discordToken);

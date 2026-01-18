@@ -46,6 +46,7 @@ bun dev:bot
 
 Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 - `DISCORD_TOKEN`
+- `DISCORD_APP_ID` (Discord Application ID; required for slash command registration)
 - `DEEPGRAM_API_KEY`
 - `TTS_PROVIDER` (optional; `deepgram`, `elevenlabs`, or `cartesia`)
 - `TTS_VOICE` (provider voice id/name)
@@ -74,6 +75,7 @@ Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 ```bash
 fly secrets set \
   DISCORD_TOKEN=... \
+  DISCORD_APP_ID=... \
   DEEPGRAM_API_KEY=... \
   TTS_PROVIDER=deepgram \
   TTS_VOICE=aura-asteria-en \
@@ -93,5 +95,5 @@ fly deploy
 ## Notes
 
 - If `nova-3` is unavailable in your Deepgram plan or region, update the bot config to `model: "nova-2"`.
-- Discord message content intent must be enabled in your bot settings for `!scribe` commands.
+- Discord message content intent should be enabled if you want the bot to read mention prompts for the agent.
 - TTS playback requires `ffmpeg` installed on the host/container.

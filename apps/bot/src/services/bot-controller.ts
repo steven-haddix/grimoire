@@ -8,7 +8,7 @@ export type BotController = {
   handleIntent: (intent: CommandIntent, ctx: CommandContext) => Promise<void>;
 };
 
-const HELP_MESSAGE = "Ask me about the session or say `!scribe start`.";
+const HELP_MESSAGE = "Ask me about the session or say `/scribe start`.";
 
 function buildVoiceConfig(
   config: BotConfig,
@@ -35,7 +35,7 @@ export function createBotController(params: {
     }
 
     if (voice.isConnected(ctx.guildId)) {
-      await ctx.reply("🟡 Already listening here. Use `!scribe stop` first.");
+      await ctx.reply("🟡 Already listening here. Use `/scribe stop` first.");
       return;
     }
 
@@ -87,9 +87,7 @@ export function createBotController(params: {
     if (intent.type !== "say") return;
 
     if (!intent.text) {
-      await ctx.reply(
-        "Usage: `!scribe say <text>` or `!scribe say --voice <id> <text>`",
-      );
+      await ctx.reply("Usage: `/scribe say` with a text prompt.");
       return;
     }
 
@@ -133,23 +131,7 @@ export function createBotController(params: {
         }
 
         if (action.type === "say") {
-          if (!ctx.voiceChannelId) {
-            await ctx.reply("Join a voice channel so I can speak.");
-            continue;
-          }
-
-          try {
-            await voice.speak({
-              guildId: ctx.guildId,
-              voiceChannelId: ctx.voiceChannelId,
-              text: action.text,
-              voice: buildVoiceConfig(config, action.voice),
-              shouldDisconnect: !transcription.hasSession(ctx.guildId),
-            });
-          } catch (error) {
-            console.error("Agent TTS failed", error);
-            await ctx.reply("❌ TTS failed. Check logs and provider config.");
-          }
+          await ctx.reply(action.text);
         }
       }
     } catch (error) {

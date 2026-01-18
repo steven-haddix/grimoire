@@ -1,5 +1,6 @@
 export type BotConfig = {
   discordToken: string;
+  discordAppId?: string;
   apiBase: string;
   botSecret: string;
   botHttpPort: number;
@@ -45,8 +46,12 @@ export function loadConfig(
   const ttsVoice = env.TTS_VOICE ?? "aura-asteria-en";
   const ttsVoiceOptions = parseVoiceOptions(env.TTS_VOICE_OPTIONS);
 
+  const discordAppId =
+    env.DISCORD_APP_ID ?? env.DISCORD_APPLICATION_ID ?? env.DISCORD_CLIENT_ID;
+
   return {
     discordToken: env.DISCORD_TOKEN!,
+    discordAppId,
     apiBase,
     botSecret: env.BOT_SECRET!,
     botHttpPort,

@@ -129,7 +129,7 @@ function createDiscordAgent(params: {
   const { input, actions } = params;
 
   return new ToolLoopAgent({
-    model: google("gpt-4.1-mini"),
+    model: google("gemini-3-flash-preview"),
     instructions,
     stopWhen: stepCountIs(6),
     tools: {

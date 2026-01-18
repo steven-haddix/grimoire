@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { botGuilds } from "@/db/schema";
 
@@ -26,8 +26,7 @@ function parsePresencePayload(value: unknown): PresencePayload | null {
     return null;
   }
 
-  const guildId =
-    typeof value.guildId === "string" ? value.guildId.trim() : "";
+  const guildId = typeof value.guildId === "string" ? value.guildId.trim() : "";
 
   if (!guildId) {
     return null;

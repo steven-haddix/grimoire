@@ -59,4 +59,8 @@ export function registerDiscordEvents(params: {
     console.log(`Message from ${msg.author.username}: ${msg.content}`);
     await commands.handleMessage(msg);
   });
+
+  client.on(Events.InteractionCreate, async (interaction) => {
+    await commands.handleInteraction(interaction);
+  });
 }
