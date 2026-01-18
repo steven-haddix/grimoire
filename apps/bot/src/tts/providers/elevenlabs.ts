@@ -1,3 +1,4 @@
+import type { Readable } from "node:stream";
 import { responseToNodeStream } from "../streaming";
 import type { TtsProvider, TtsProviderName, TtsRequest } from "../types";
 
