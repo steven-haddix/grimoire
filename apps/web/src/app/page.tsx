@@ -75,19 +75,13 @@ export default function Home() {
                 <span className="text-primary">/scribe</span> <span className="text-foreground">start</span>
               </div>
             </div>
-            <div className="order-1 md:order-2 relative aspect-video bg-card/50 border border-border/60 border-dashed rounded-xl flex items-center justify-center">
-               <p className="text-center text-muted-foreground text-sm p-4">
-                 [Placeholder: Discord UI Screenshot]<br/>
-                 <span className="text-xs opacity-70">Showing user executing the /scribe start command.</span>
-               </p>
+            <div className="order-1 md:order-2 relative aspect-video bg-card/50 border border-border/60 rounded-xl overflow-hidden shadow-lg">
+               <img src="/grimoire_vp_start_scribe.png" alt="Discord UI showing /scribe start command" className="w-full h-full object-cover" />
             </div>
 
             {/* Step 2: Stop & Summarize */}
-            <div className="order-3 md:order-3 relative aspect-video bg-card/50 border border-border/60 border-dashed rounded-xl flex items-center justify-center">
-              <p className="text-center text-muted-foreground text-sm p-4">
-                 [Placeholder: Summary Result Screenshot]<br/>
-                 <span className="text-xs opacity-70">Showing the generated summary on the dashboard.</span>
-               </p>
+            <div className="order-3 md:order-3 relative aspect-video bg-card/50 border border-border/60 rounded-xl overflow-hidden shadow-lg">
+              <img src="/grimoire_vp_stop_scribe.png" alt="Grimoire bot showing session ended and summarizing" className="w-full h-full object-cover" />
             </div>
             <div className="order-4 md:order-4 space-y-6">
                <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary mb-4">
@@ -115,11 +109,8 @@ export default function Home() {
                 <span className="text-primary">/scribe</span> <span className="text-foreground">recap</span>
               </div>
             </div>
-            <div className="order-5 md:order-6 relative aspect-video bg-card/50 border border-border/60 border-dashed rounded-xl flex items-center justify-center">
-               <p className="text-center text-muted-foreground text-sm p-4">
-                 [Placeholder: Voice Channel Screenshot]<br/>
-                 <span className="text-xs opacity-70">Showing the bot speaking in the channel.</span>
-               </p>
+            <div className="order-5 md:order-6 relative aspect-video bg-card/50 border border-border/60 rounded-xl overflow-hidden shadow-lg">
+               <img src="/grimoire_vp_commands.png" alt="Discord showing scribe slash commands" className="w-full h-full object-cover" />
             </div>
           </div>
         </section>
