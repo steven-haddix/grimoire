@@ -15,6 +15,7 @@ export type CommandIntent =
   | { type: "help" }
   | { type: "start" }
   | { type: "stop" }
+  | { type: "recap" }
   | { type: "say"; text: string; voiceOverride?: string }
   | { type: "agent"; message: string };
 

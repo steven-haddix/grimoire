@@ -81,6 +81,8 @@ export function createCommandRouter(params: {
       intent = { type: "start" };
     } else if (sub === "stop") {
       intent = { type: "stop" };
+    } else if (sub === "recap") {
+      intent = { type: "recap" };
     } else if (sub === "say") {
       const text = interaction.options.getString("text", true);
       const voiceOverride = interaction.options.getString("voice") ?? undefined;

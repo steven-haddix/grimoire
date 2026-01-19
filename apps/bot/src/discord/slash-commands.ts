@@ -18,6 +18,11 @@ export function buildScribeCommands() {
       )
       .addSubcommand((sub) =>
         sub
+          .setName("recap")
+          .setDescription("Generate and speak a recap of the last session"),
+      )
+      .addSubcommand((sub) =>
+        sub
           .setName("say")
           .setDescription("Speak a message in the current voice channel")
           .addStringOption((opt) =>

@@ -83,6 +83,21 @@ export function createBotController(params: {
     }
   };
 
+  const handleRecap = async (ctx: CommandContext) => {
+    if (!ctx.voiceChannelId) {
+      await ctx.reply("Join a voice channel so I can speak the recap.");
+      return;
+    }
+
+    // Reuse handleAgent logic but with a specific prompt
+    // Note: We construct a fake 'agent' intent to reuse the logic
+    await handleAgent(ctx, {
+      type: "agent",
+      message:
+        "Please provide a dramatic, narrated recap of the previous session for the voice channel. Use the 'say' tool.",
+    });
+  };
+
   const handleSay = async (ctx: CommandContext, intent: CommandIntent) => {
     if (intent.type !== "say") return;
 
@@ -131,7 +146,18 @@ export function createBotController(params: {
         }
 
         if (action.type === "say") {
-          await ctx.reply(action.text);
+          if (ctx.voiceChannelId) {
+            const voiceConfig = buildVoiceConfig(config, action.voice);
+            await voice.speak({
+              guildId: ctx.guildId,
+              voiceChannelId: ctx.voiceChannelId,
+              text: action.text,
+              voice: voiceConfig,
+              shouldDisconnect: !transcription.hasSession(ctx.guildId),
+            });
+          } else {
+            await ctx.reply(action.text);
+          }
         }
       }
     } catch (error) {
@@ -157,6 +183,11 @@ export function createBotController(params: {
 
     if (intent.type === "stop") {
       await handleStop(ctx);
+      return;
+    }
+
+    if (intent.type === "recap") {
+      await handleRecap(ctx);
       return;
     }
 
