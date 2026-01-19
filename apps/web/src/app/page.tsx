@@ -2,7 +2,6 @@ import { HomeAuthControls } from "@/components/home-auth-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { InstallBotButton } from "@/components/install-bot-button";
 import { Mic, Play, Square, Bot, Sparkles, ScrollText, Command, Sword, Users } from "lucide-react";
 import Link from "next/link";
 
@@ -33,7 +32,6 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-center pt-4">
             <HomeAuthControls />
-            <InstallBotButton />
           </div>
 
           {/* Hero Visual Placeholder */}
