@@ -4,6 +4,16 @@ import { nextCookies } from "better-auth/next-js";
 import { db } from "../../db";
 import * as schema from "../../db/schema";
 
+// Dynamically determine the base URL for Vercel preview deployments
+const getBaseURL = () => {
+  // For Vercel deployments (preview or production)
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  // Fallback to BETTER_AUTH_URL or localhost
+  return process.env.BETTER_AUTH_URL || "http://localhost:3000";
+};
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -20,7 +30,12 @@ export const auth = betterAuth({
       generateId: "serial",
     },
   },
-  baseURL: process.env.BETTER_AUTH_URL,
+  baseURL: getBaseURL(),
+  trustedOrigins: [
+    getBaseURL(),
+    "http://localhost:3000",
+    "https://*.vercel.app"
+  ],
   secret: process.env.BETTER_AUTH_SECRET,
   socialProviders: {
     discord: {
