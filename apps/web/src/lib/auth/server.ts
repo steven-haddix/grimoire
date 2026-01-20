@@ -34,7 +34,8 @@ export const auth = betterAuth({
   trustedOrigins: [
     getBaseURL(),
     "http://localhost:3000",
-    "https://*.vercel.app"
+    "https://www.grimoire.bot",
+    "https://*.vercel.app",
   ],
   secret: process.env.BETTER_AUTH_SECRET,
   socialProviders: {
