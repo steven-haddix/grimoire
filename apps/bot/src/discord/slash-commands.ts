@@ -1,7 +1,7 @@
 import { REST, Routes, SlashCommandBuilder } from "discord.js";
 import type { BotConfig } from "../config";
 
-export function buildScribeCommands() {
+export function buildCommands() {
   return [
     new SlashCommandBuilder()
       .setName("scribe")
@@ -38,6 +38,35 @@ export function buildScribeCommands() {
               .setRequired(false),
           ),
       ),
+    new SlashCommandBuilder()
+      .setName("campaign")
+      .setDescription("Manage campaign scopes")
+      .addSubcommand((sub) =>
+        sub
+          .setName("create")
+          .setDescription("Create a new campaign")
+          .addStringOption((opt) =>
+            opt
+              .setName("name")
+              .setDescription("Campaign name")
+              .setRequired(true),
+          )
+          .addStringOption((opt) =>
+            opt.setName("description").setDescription("Campaign description"),
+          ),
+      )
+      .addSubcommand((sub) => sub.setName("list").setDescription("List campaigns"))
+      .addSubcommand((sub) =>
+        sub
+          .setName("select")
+          .setDescription("Select active campaign")
+          .addStringOption((opt) =>
+            opt
+              .setName("name")
+              .setDescription("Campaign name")
+              .setRequired(true),
+          ),
+      ),
   ].map((command) => command.toJSON());
 }
 
@@ -49,6 +78,6 @@ export async function registerSlashCommands(config: BotConfig) {
 
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
   await rest.put(Routes.applicationCommands(config.discordAppId), {
-    body: buildScribeCommands(),
+    body: buildCommands(),
   });
 }

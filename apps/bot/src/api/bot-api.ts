@@ -23,6 +23,15 @@ export type GuildPresence = {
   icon: string | null;
 };
 
+export type Campaign = {
+  id: number;
+  guildId: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type BotApi = {
   upsertGuildPresence: (guild: GuildPresence) => Promise<void>;
   markGuildRemoved: (guildId: string) => Promise<void>;
@@ -39,6 +48,19 @@ export type BotApi = {
   }) => Promise<void>;
   summarizeSession: (sessionId: number) => Promise<void>;
   runAgent: (input: AgentRequest) => Promise<AgentAction[]>;
+  createCampaign: (params: {
+    guildId: string;
+    name: string;
+    description?: string;
+  }) => Promise<Campaign>;
+  listCampaigns: (guildId: string) => Promise<{
+    campaigns: Campaign[];
+    activeCampaignId?: number;
+  }>;
+  setActiveCampaign: (params: {
+    guildId: string;
+    name: string;
+  }) => Promise<Campaign>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -152,6 +174,37 @@ export function createBotApi(config: BotConfig): BotApi {
       }
 
       return parsed.actions;
+    },
+    createCampaign: async ({ guildId, name, description }) => {
+      const res = await postBotJson(
+        "/bot/campaigns",
+        { guildId, name, description },
+        "Campaign create",
+      );
+      return (await res.json()) as Campaign;
+    },
+    listCampaigns: async (guildId) => {
+      const res = await fetch(`${config.apiBase}/bot/campaigns?guildId=${guildId}`, {
+        headers: {
+          "x-bot-secret": config.botSecret,
+        },
+      });
+      if (!res.ok) {
+        throw new Error("List campaigns failed");
+      }
+      return (await res.json()) as {
+        campaigns: Campaign[];
+        activeCampaignId?: number;
+      };
+    },
+    setActiveCampaign: async ({ guildId, name }) => {
+      const res = await postBotJson(
+        "/bot/campaigns/active",
+        { guildId, name },
+        "Set active campaign",
+      );
+      const data = (await res.json()) as { campaign: Campaign };
+      return data.campaign;
     },
   };
 }

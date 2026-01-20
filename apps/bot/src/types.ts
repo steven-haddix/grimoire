@@ -17,7 +17,10 @@ export type CommandIntent =
   | { type: "stop" }
   | { type: "recap" }
   | { type: "say"; text: string; voiceOverride?: string }
-  | { type: "agent"; message: string };
+  | { type: "agent"; message: string }
+  | { type: "campaign_create"; name: string; description?: string }
+  | { type: "campaign_list" }
+  | { type: "campaign_select"; name: string };
 
 export type TranscriptInput = {
   sessionId: number;

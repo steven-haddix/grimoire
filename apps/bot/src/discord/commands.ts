@@ -72,21 +72,38 @@ export function createCommandRouter(params: {
   const handleInteraction = async (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
     if (!interaction.inGuild()) return;
-    if (interaction.commandName !== "scribe") return;
 
-    const sub = interaction.options.getSubcommand();
     let intent: CommandIntent | null = null;
 
-    if (sub === "start") {
-      intent = { type: "start" };
-    } else if (sub === "stop") {
-      intent = { type: "stop" };
-    } else if (sub === "recap") {
-      intent = { type: "recap" };
-    } else if (sub === "say") {
-      const text = interaction.options.getString("text", true);
-      const voiceOverride = interaction.options.getString("voice") ?? undefined;
-      intent = { type: "say", text, voiceOverride };
+    if (interaction.commandName === "scribe") {
+      const sub = interaction.options.getSubcommand();
+
+      if (sub === "start") {
+        intent = { type: "start" };
+      } else if (sub === "stop") {
+        intent = { type: "stop" };
+      } else if (sub === "recap") {
+        intent = { type: "recap" };
+      } else if (sub === "say") {
+        const text = interaction.options.getString("text", true);
+        const voiceOverride =
+          interaction.options.getString("voice") ?? undefined;
+        intent = { type: "say", text, voiceOverride };
+      }
+    } else if (interaction.commandName === "campaign") {
+      const sub = interaction.options.getSubcommand();
+
+      if (sub === "create") {
+        const name = interaction.options.getString("name", true);
+        const description =
+          interaction.options.getString("description") ?? undefined;
+        intent = { type: "campaign_create", name, description };
+      } else if (sub === "list") {
+        intent = { type: "campaign_list" };
+      } else if (sub === "select") {
+        const name = interaction.options.getString("name", true);
+        intent = { type: "campaign_select", name };
+      }
     }
 
     if (!intent) return;

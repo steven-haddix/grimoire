@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, FileText } from "lucide-react";
+import { LayoutDashboard, FileText, Map } from "lucide-react";
 
 const items = [
   {
@@ -15,6 +15,11 @@ const items = [
     title: "Summaries",
     href: "/account/sessions",
     icon: FileText,
+  },
+  {
+    title: "Campaigns",
+    href: "/account/campaigns",
+    icon: Map,
   },
 ];
 
