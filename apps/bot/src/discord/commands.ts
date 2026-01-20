@@ -72,7 +72,7 @@ export function createCommandRouter(params: {
   const handleInteraction = async (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
     if (!interaction.inGuild()) return;
-    if (interaction.commandName !== "scribe") return;
+    if (interaction.commandName !== "grim") return;
 
     const sub = interaction.options.getSubcommand();
     let intent: CommandIntent | null = null;

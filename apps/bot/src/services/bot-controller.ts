@@ -8,7 +8,7 @@ export type BotController = {
   handleIntent: (intent: CommandIntent, ctx: CommandContext) => Promise<void>;
 };
 
-const HELP_MESSAGE = "Ask me about the session or say `/scribe start`.";
+const HELP_MESSAGE = "Ask me about the session or say `/grim start`.";
 
 function buildVoiceConfig(
   config: BotConfig,
@@ -35,7 +35,7 @@ export function createBotController(params: {
     }
 
     if (voice.isConnected(ctx.guildId)) {
-      await ctx.reply("🟡 Already listening here. Use `/scribe stop` first.");
+      await ctx.reply("🟡 Already listening here. Use `/grim stop` first.");
       return;
     }
 
@@ -102,7 +102,7 @@ export function createBotController(params: {
     if (intent.type !== "say") return;
 
     if (!intent.text) {
-      await ctx.reply("Usage: `/scribe say` with a text prompt.");
+      await ctx.reply("Usage: `/grim say` with a text prompt.");
       return;
     }
 

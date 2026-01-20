@@ -41,7 +41,7 @@ export default function Home() {
           <div className="lg:flex-1 w-full relative group cursor-default">
             <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-secondary/20 to-primary/20 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-1000"></div>
             <div className="relative bg-card border border-border rounded-lg shadow-2xl flex items-center justify-center overflow-hidden">
-              <img src="/grimoire_vp_sessions.png" alt="Discord UI showing /scribe start command" className="w-full h-full object-cover" />
+              <img src="/grimoire_vp_sessions.png" alt="Discord UI showing /grim start command" className="w-full h-full object-cover" />
             </div>
           </div>
         </section>
@@ -65,11 +65,11 @@ export default function Home() {
                 Summon the bot to your voice channel. It listens in the background, distinguishing between players and capturing every roll, joke, and plot twist in real-time.
               </p>
               <div className="bg-card border border-border rounded-md p-4 font-mono text-sm shadow-sm">
-                <span className="text-primary">/scribe</span> <span className="text-foreground">start</span>
+                <span className="text-primary">/grim</span> <span className="text-foreground">start</span>
               </div>
             </div>
             <div className="order-1 md:order-2 relative aspect-video bg-card/50 border border-border/60 rounded-xl overflow-hidden shadow-lg">
-               <img src="/grimoire_vp_start_scribe.png" alt="Discord UI showing /scribe start command" className="w-full h-full object-cover" />
+               <img src="/grimoire_vp_start_scribe.png" alt="Discord UI showing /grim start command" className="w-full h-full object-cover" />
             </div>
 
             {/* Step 2: Stop & Summarize */}
@@ -85,7 +85,7 @@ export default function Home() {
                 When the session ends, simply stop the bot. Grimoire instantly processes the transcript and weaves a structured summary, capturing key plot beats and loot.
               </p>
                <div className="bg-card border border-border rounded-md p-4 font-mono text-sm shadow-sm">
-                <span className="text-primary">/scribe</span> <span className="text-foreground">stop</span>
+                <span className="text-primary">/grim</span> <span className="text-foreground">stop</span>
               </div>
             </div>
 
@@ -99,11 +99,11 @@ export default function Home() {
                 Start your next session with a dramatic, AI-narrated recap of the previous adventure, played directly into the voice channel to get everyone back in the zone.
               </p>
                <div className="bg-card border border-border rounded-md p-4 font-mono text-sm shadow-sm">
-                <span className="text-primary">/scribe</span> <span className="text-foreground">recap</span>
+                <span className="text-primary">/grim</span> <span className="text-foreground">recap</span>
               </div>
             </div>
             <div className="order-5 md:order-6 relative aspect-video bg-card/50 border border-border/60 rounded-xl overflow-hidden shadow-lg">
-               <img src="/grimoire_vp_commands.png" alt="Discord showing scribe slash commands" className="w-full h-full object-cover" />
+               <img src="/grimoire_vp_commands.png" alt="Discord showing grim slash commands" className="w-full h-full object-cover" />
             </div>
           </div>
         </section>

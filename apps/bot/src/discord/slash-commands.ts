@@ -1,10 +1,10 @@
 import { REST, Routes, SlashCommandBuilder } from "discord.js";
 import type { BotConfig } from "../config";
 
-export function buildScribeCommands() {
+export function buildGrimCommands() {
   return [
     new SlashCommandBuilder()
-      .setName("scribe")
+      .setName("grim")
       .setDescription("Transcribe sessions and control playback")
       .addSubcommand((sub) =>
         sub
@@ -49,6 +49,6 @@ export async function registerSlashCommands(config: BotConfig) {
 
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
   await rest.put(Routes.applicationCommands(config.discordAppId), {
-    body: buildScribeCommands(),
+    body: buildGrimCommands(),
   });
 }
