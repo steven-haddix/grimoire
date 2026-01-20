@@ -42,7 +42,7 @@ export default function Home() {
                 <div className="w-16 h-16 bg-muted rounded-full mx-auto flex items-center justify-center">
                    <Sparkles className="w-8 h-8 text-muted-foreground/50" />
                 </div>
-                <img src="/grimoire_vp_start_scribe.png" alt="Discord UI showing /scribe start command" className="w-full h-full object-cover" />
+                <img src="/grimoire_vp_sessions.png" alt="Discord UI showing /scribe start command" className="w-full h-full object-cover" />
               </div>
             </div>
           </div>
