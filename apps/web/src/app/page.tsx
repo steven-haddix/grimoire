@@ -1,6 +1,6 @@
 import { HomeAuthControls } from "@/components/home-auth-controls";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Mic, Play, Square, Bot, Sparkles, ScrollText, Command, Sword, Users } from "lucide-react";
 import Link from "next/link";
@@ -144,6 +144,9 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="border-t border-border pt-8 pb-12 text-center space-y-6">
+          <div className="flex items-center justify-center">
+            <ThemeToggle />
+          </div>
            <p className="text-sm text-muted-foreground">
              Built with <Link href="https://nextjs.org" className="underline hover:text-foreground">Next.js</Link>, <Link href="https://discord.js.org" className="underline hover:text-foreground">Discord.js</Link>, and <Link href="https://deepgram.com" className="underline hover:text-foreground">Deepgram</Link>.
            </p>

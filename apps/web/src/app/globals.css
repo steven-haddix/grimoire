@@ -9,6 +9,9 @@
   /* DND Theme - Parchment Light */
   --background: #f5f1e8;
   --foreground: #2a211b;
+  --page-spotlight: #fff6e8;
+  --page-mid: #f5f1e8;
+  --page-deep: #efe6da;
   
   --card: #fdfbf7;
   --card-foreground: #2a211b;
@@ -53,8 +56,8 @@
 
 body {
   min-height: 100vh;
-  background: radial-gradient(circle at top, #fff6e8 0%, #f5f1e8 45%, #efe6da 100%);
-  color: #2a211b;
+  background: radial-gradient(circle at top, var(--page-spotlight) 0%, var(--page-mid) 45%, var(--page-deep) 100%);
+  color: var(--foreground);
   font-family: var(--font-alegreya), "Iowan Old Style", serif;
 }
 
@@ -130,9 +133,13 @@ h3 {
 }
 
 .dark {
+  color-scheme: dark;
   /* DND Theme - Dark Mode (Deep Charcoal/Brown) */
   --background: #1a1614;
   --foreground: #e6dac6;
+  --page-spotlight: #2a221d;
+  --page-mid: #1f1a17;
+  --page-deep: #161210;
   
   --card: #241f1c;
   --card-foreground: #e6dac6;
