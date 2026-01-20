@@ -32,7 +32,7 @@ export class CartesiaTtsProvider implements TtsProvider {
       generation_config: {
         volume: 1,
         speed: 1,
-        emotion: "neutral",
+        // emotion: "neutral", // Removing this as it can cause 500s with some models/voices
       },
     };
 
