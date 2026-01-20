@@ -17,33 +17,31 @@ export default function Home() {
       <div className="relative z-10 max-w-6xl mx-auto px-6 py-12 md:py-24 space-y-24">
         
         {/* Hero Section */}
-        <section className="flex flex-col items-center text-center space-y-8">
-          <Badge variant="outline" className="px-4 py-1 border-primary/30 text-primary bg-primary/5 uppercase tracking-widest text-xs font-semibold rounded-full">
-            The Ultimate Dungeon Master's Assistant
-          </Badge>
-          
-          <h1 className="text-5xl md:text-7xl font-heading font-bold text-foreground leading-tight max-w-4xl">
-            Never Take <span className="text-primary italic">Session Notes</span> Again
-          </h1>
-          
-          <p className="text-xl text-muted-foreground max-w-2xl leading-relaxed">
-            Grimoire listens to your Discord voice channel, transcribes the roleplay, and magically generates structured summaries, loot lists, and NPC logs.
-          </p>
+        <section className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
+          {/* Left Content */}
+          <div className="flex flex-col space-y-8 lg:flex-1">
+            <Badge variant="outline" className="px-4 py-1 border-primary/30 text-primary bg-primary/5 uppercase tracking-widest text-xs font-semibold rounded-full w-fit">
+              The Ultimate Dungeon Master's Assistant
+            </Badge>
+            
+            <h1 className="text-5xl md:text-6xl font-heading font-bold text-foreground leading-tight">
+              Never Take <span className="text-primary italic">Session Notes</span> Again
+            </h1>
+            
+            <p className="text-xl text-muted-foreground leading-relaxed">
+              Grimoire listens to your Discord voice channel, transcribes the roleplay, and magically generates structured summaries, loot lists, and NPC logs.
+            </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-center pt-4">
-            <HomeAuthControls />
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+              <HomeAuthControls />
+            </div>
           </div>
 
-          {/* Hero Visual Placeholder */}
-          <div className="w-full max-w-4xl mt-12 relative group cursor-default">
+          {/* Right Visual */}
+          <div className="lg:flex-1 w-full relative group cursor-default">
             <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-secondary/20 to-primary/20 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-1000"></div>
-            <div className="relative aspect-video bg-card border border-border rounded-lg shadow-2xl flex items-center justify-center overflow-hidden">
-              <div className="text-center space-y-4 p-8">
-                <div className="w-16 h-16 bg-muted rounded-full mx-auto flex items-center justify-center">
-                   <Sparkles className="w-8 h-8 text-muted-foreground/50" />
-                </div>
-                <img src="/grimoire_vp_sessions.png" alt="Discord UI showing /scribe start command" className="w-full h-full object-cover" />
-              </div>
+            <div className="relative bg-card border border-border rounded-lg shadow-2xl flex items-center justify-center overflow-hidden">
+              <img src="/grimoire_vp_sessions.png" alt="Discord UI showing /scribe start command" className="w-full h-full object-cover" />
             </div>
           </div>
         </section>
