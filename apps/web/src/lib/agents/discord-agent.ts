@@ -149,6 +149,15 @@ function createDiscordAgent(params: {
     model: google("gemini-3-flash-preview"),
     instructions,
     stopWhen: stepCountIs(6),
+    experimental_telemetry: {
+      isEnabled: true,
+      functionId: "discord-agent",
+      metadata: {
+        guildId: input.guildId,
+        channelId: input.channelId,
+        userId: input.userId,
+      },
+    },
     tools: {
       reply: tool({
         description: "Send a text response back to the Discord user.",
