@@ -63,6 +63,13 @@ export async function POST(req: Request) {
     system:
       "You are a D&D scribe. Summarize the session with sections for Plot, Combat, and Loot.",
     prompt: `TRANSCRIPT:\n${script}`,
+    experimental_telemetry: {
+      isEnabled: true,
+      functionId: "summarize-session",
+      metadata: {
+        sessionId,
+      },
+    },
     providerOptions: {
       google: {
         thinkingConfig: {
