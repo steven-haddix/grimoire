@@ -1,12 +1,12 @@
-import { redirect } from "next/navigation";
+import { desc, inArray } from "drizzle-orm";
+import { AlertCircle } from "lucide-react";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth/server";
-import { getUserAdminGuilds } from "@/lib/discord/server";
+import { redirect } from "next/navigation";
+import { Card, CardContent } from "@/components/ui/card";
 import { db } from "@/db";
 import { campaigns, sessions, summaries } from "@/db/schema";
-import { inArray, desc } from "drizzle-orm";
-import { Card, CardContent } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import { auth } from "@/lib/auth/server";
+import { getUserAdminGuilds } from "@/lib/discord/server";
 import { SessionsList } from "./sessions-list";
 
 export default async function SessionsPage() {
@@ -57,10 +57,9 @@ export default async function SessionsPage() {
 
   const summariesBySession: Record<number, typeof sessionSummaries> = {};
   for (const summary of sessionSummaries) {
-    if (!summariesBySession[summary.sessionId]) {
-      summariesBySession[summary.sessionId] = [];
-    }
-    summariesBySession[summary.sessionId].push(summary);
+    const list = summariesBySession[summary.sessionId] ?? [];
+    list.push(summary);
+    summariesBySession[summary.sessionId] = list;
   }
 
   return (
