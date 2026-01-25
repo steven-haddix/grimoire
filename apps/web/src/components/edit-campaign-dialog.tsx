@@ -1,9 +1,8 @@
 "use client";
 
-import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { createCampaign } from "@/app/actions/campaigns";
+import { updateCampaign } from "@/app/actions/campaigns";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,39 +11,43 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-interface Guild {
-  id: string;
-  name: string;
+interface EditCampaignDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  campaign: {
+    id: number;
+    name: string;
+    description: string | null;
+  };
+  guildId: string;
 }
 
-export function CreateCampaignDialog({ guilds }: { guilds: Guild[] }) {
-  const [open, setOpen] = useState(false);
+export function EditCampaignDialog({
+  open,
+  onOpenChange,
+  campaign,
+  guildId,
+}: EditCampaignDialogProps) {
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     const formData = new FormData(event.currentTarget);
+    formData.append("campaignId", campaign.id.toString());
+    formData.append("guildId", guildId);
 
     try {
-      await createCampaign(formData);
-      toast.success("Campaign created successfully");
-      setOpen(false);
+      await updateCampaign(formData);
+      toast.success("Campaign updated successfully");
+      onOpenChange(false);
     } catch (error) {
-      toast.error("Failed to create campaign");
+      toast.error("Failed to update campaign");
       console.error(error);
     } finally {
       setLoading(false);
@@ -52,42 +55,22 @@ export function CreateCampaignDialog({ guilds }: { guilds: Guild[] }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          New Campaign
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[550px] py-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
-          <DialogTitle>Create Campaign</DialogTitle>
+          <DialogTitle>Edit Campaign</DialogTitle>
           <DialogDescription>
-            Create a new campaign to group your sessions.
+            Update the details of your campaign.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit}>
           <div className="grid gap-6 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="guildId">Server</Label>
-              <Select name="guildId" required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a server" />
-                </SelectTrigger>
-                <SelectContent>
-                  {guilds.map((guild) => (
-                    <SelectItem key={guild.id} value={guild.id}>
-                      {guild.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
               <Label htmlFor="name">Name</Label>
               <Input
                 id="name"
                 name="name"
+                defaultValue={campaign.name}
                 placeholder="Campaign Name"
                 required
               />
@@ -97,14 +80,15 @@ export function CreateCampaignDialog({ guilds }: { guilds: Guild[] }) {
               <Textarea
                 id="description"
                 name="description"
+                defaultValue={campaign.description || ""}
                 placeholder="Brief description of the campaign"
-                className="min-h-[150px] resize-y"
+                className="min-h-[200px] resize-y"
               />
             </div>
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading}>
-              {loading ? "Creating..." : "Create Campaign"}
+              {loading ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>

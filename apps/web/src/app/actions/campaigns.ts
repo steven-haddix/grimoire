@@ -122,3 +122,47 @@ export async function deleteCampaign(campaignId: number, guildId: string) {
   revalidatePath("/account/campaigns");
   return { success: true };
 }
+
+export async function updateCampaign(formData: FormData) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) throw new Error("Unauthorized");
+
+  const campaignId = parseInt(formData.get("campaignId") as string);
+  const guildId = formData.get("guildId") as string;
+  const name = formData.get("name") as string;
+  const description = formData.get("description") as string;
+
+  if (!campaignId || !guildId || !name) {
+    throw new Error("Missing required fields");
+  }
+
+  // Verify user has admin access to this guild
+  const adminGuilds = await getUserAdminGuilds();
+  const hasAccess = adminGuilds.some((g) => g.id === guildId);
+
+  if (!hasAccess) {
+    throw new Error("Unauthorized access to guild");
+  }
+
+  // Verify campaign belongs to guild
+  const campaign = await db.query.campaigns.findFirst({
+    where: and(eq(campaigns.id, campaignId), eq(campaigns.guildId, guildId)),
+  });
+
+  if (!campaign) {
+    throw new Error("Campaign not found");
+  }
+
+  await db
+    .update(campaigns)
+    .set({
+      name,
+      description,
+      updatedAt: new Date(),
+    })
+    .where(eq(campaigns.id, campaignId));
+
+  revalidatePath("/account/campaigns");
+  revalidatePath(`/account/campaigns/${campaignId}`);
+  return { success: true };
+}
