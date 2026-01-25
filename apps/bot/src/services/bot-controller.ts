@@ -171,6 +171,63 @@ export function createBotController(params: {
     await ctx.reply(HELP_MESSAGE);
   };
 
+  const handleCampaignCreate = async (
+    ctx: CommandContext,
+    name: string,
+    description?: string,
+  ) => {
+    try {
+      const campaign = await api.createCampaign({
+        guildId: ctx.guildId,
+        name,
+        description,
+      });
+      await ctx.reply(
+        `✅ Created campaign **${campaign.name}**. It is now active.`,
+      );
+    } catch (error) {
+      console.error("Campaign create failed", error);
+      await ctx.reply("❌ Failed to create campaign.");
+    }
+  };
+
+  const handleCampaignList = async (ctx: CommandContext) => {
+    try {
+      const { campaigns, activeCampaignId } = await api.listCampaigns(
+        ctx.guildId,
+      );
+      if (campaigns.length === 0) {
+        await ctx.reply("No campaigns found.");
+        return;
+      }
+
+      const list = campaigns
+        .map((c) => {
+          const active = c.id === activeCampaignId ? " (Active) 🌟" : "";
+          return `- **${c.name}**${active}: ${c.description || "No description"}`;
+        })
+        .join("\n");
+
+      await ctx.reply(`**Campaigns:**\n${list}`);
+    } catch (error) {
+      console.error("Campaign list failed", error);
+      await ctx.reply("❌ Failed to list campaigns.");
+    }
+  };
+
+  const handleCampaignSelect = async (ctx: CommandContext, name: string) => {
+    try {
+      const campaign = await api.setActiveCampaign({
+        guildId: ctx.guildId,
+        name,
+      });
+      await ctx.reply(`✅ Active campaign set to **${campaign.name}**.`);
+    } catch (error) {
+      console.error("Campaign select failed", error);
+      await ctx.reply("❌ Failed to select campaign. Ensure it exists.");
+    }
+  };
+
   const handleIntent = async (intent: CommandIntent, ctx: CommandContext) => {
     if (intent.type === "help") {
       await handleHelp(ctx);
@@ -194,6 +251,21 @@ export function createBotController(params: {
 
     if (intent.type === "say") {
       await handleSay(ctx, intent);
+      return;
+    }
+
+    if (intent.type === "campaign_create") {
+      await handleCampaignCreate(ctx, intent.name, intent.description);
+      return;
+    }
+
+    if (intent.type === "campaign_list") {
+      await handleCampaignList(ctx);
+      return;
+    }
+
+    if (intent.type === "campaign_select") {
+      await handleCampaignSelect(ctx, intent.name);
       return;
     }
 

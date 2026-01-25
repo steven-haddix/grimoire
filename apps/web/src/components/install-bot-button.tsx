@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { buildDiscordBotInstallUrl } from "@/lib/discord/installUrl";
+import { useEffect, useState } from "react";
 
 type InstallBotButtonProps = {
   guildId?: string;
@@ -9,6 +10,11 @@ type InstallBotButtonProps = {
 
 export function InstallBotButton({ guildId }: InstallBotButtonProps) {
   const appId = process.env.NEXT_PUBLIC_DISCORD_APP_ID;
+  const [origin, setOrigin] = useState<string>("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   if (!appId) {
     return (
@@ -21,6 +27,7 @@ export function InstallBotButton({ guildId }: InstallBotButtonProps) {
   const installUrl = buildDiscordBotInstallUrl({
     clientId: appId,
     guildId,
+    redirectUri: origin ? `${origin}/account/campaigns?installed=true` : undefined,
   });
 
   return (

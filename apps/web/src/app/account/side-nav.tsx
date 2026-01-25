@@ -3,13 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, FileText } from "lucide-react";
+import { LayoutDashboard, FileText, Map } from "lucide-react";
 
 const items = [
   {
     title: "Dashboard",
     href: "/account",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Campaigns",
+    href: "/account/campaigns",
+    icon: Map,
   },
   {
     title: "Summaries",

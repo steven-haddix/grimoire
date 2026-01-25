@@ -38,12 +38,45 @@ export function buildGrimCommands() {
               .setRequired(false),
           ),
       ),
+    new SlashCommandBuilder()
+      .setName("campaign")
+      .setDescription("Manage campaign scopes")
+      .addSubcommand((sub) =>
+        sub
+          .setName("create")
+          .setDescription("Create a new campaign")
+          .addStringOption((opt) =>
+            opt
+              .setName("name")
+              .setDescription("Campaign name")
+              .setRequired(true),
+          )
+          .addStringOption((opt) =>
+            opt.setName("description").setDescription("Campaign description"),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub.setName("list").setDescription("List campaigns"),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("select")
+          .setDescription("Select active campaign")
+          .addStringOption((opt) =>
+            opt
+              .setName("name")
+              .setDescription("Campaign name")
+              .setRequired(true),
+          ),
+      ),
   ].map((command) => command.toJSON());
 }
 
 export async function registerSlashCommands(config: BotConfig) {
   if (!config.discordAppId) {
-    console.warn("DISCORD_APP_ID not set; skipping slash command registration.");
+    console.warn(
+      "DISCORD_APP_ID not set; skipping slash command registration.",
+    );
     return;
   }
 

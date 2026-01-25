@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { sessions } from "@/db/schema";
+import { sessions, botGuilds } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 type SessionStartPayload = {
   guildId: string;
@@ -44,11 +45,17 @@ export async function POST(req: Request) {
     );
   }
 
+  const guildData = await db.query.botGuilds.findFirst({
+    where: eq(botGuilds.guildId, payload.guildId),
+    columns: { activeCampaignId: true },
+  });
+
   const [newSession] = await db
     .insert(sessions)
     .values({
       guildId: payload.guildId,
       channelId: payload.channelId,
+      campaignId: guildData?.activeCampaignId,
       status: "active",
     })
     .returning({ id: sessions.id });
