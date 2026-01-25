@@ -136,6 +136,7 @@ export function createBotController(params: {
         channelId: ctx.channelId,
         userId: ctx.userId,
         userName: ctx.userName,
+        userDisplayName: ctx.userDisplayName,
         message: intent.message,
       });
 

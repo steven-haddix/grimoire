@@ -43,7 +43,12 @@ const tts = new TtsService(createTtsProviderFromEnv(process.env));
 const transcription = new TranscriptionService(
   stt,
   { ingest: api.ingestTranscript },
-  (userId) => client.users.cache.get(userId)?.username,
+  (userId, guildId) => {
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return client.users.cache.get(userId)?.username;
+    const member = guild.members.cache.get(userId);
+    return member?.displayName ?? member?.user.username ?? "Unknown";
+  },
 );
 const voice = createVoiceManager({ client, tts, transcription });
 const controller = createBotController({ config, api, voice, transcription });

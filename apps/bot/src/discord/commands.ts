@@ -23,6 +23,7 @@ export function createCommandRouter(params: {
     channelId: msg.channel.id,
     userId: msg.author.id,
     userName: msg.author.username,
+    userDisplayName: msg.member?.displayName ?? msg.author.username,
     voiceChannelId: msg.member?.voice.channel?.id ?? undefined,
     reply: async (content) => {
       await msg.reply(content);
@@ -43,6 +44,8 @@ export function createCommandRouter(params: {
       channelId: interaction.channelId ?? "",
       userId: interaction.user.id,
       userName: interaction.user.username,
+      userDisplayName:
+        member?.displayName ?? interaction.user.username,
       voiceChannelId: member?.voice.channelId ?? undefined,
       reply: async (content) => {
         if (replyStrategy === "edit") {

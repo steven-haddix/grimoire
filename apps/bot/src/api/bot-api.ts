@@ -14,6 +14,7 @@ export type AgentRequest = {
   channelId: string;
   userId: string;
   userName: string;
+  userDisplayName: string;
   message: string;
 };
 

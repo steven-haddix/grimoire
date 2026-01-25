@@ -10,6 +10,7 @@ export type DiscordAgentInput = {
   channelId: string;
   userId: string;
   userName: string;
+  userDisplayName: string;
   message: string;
 };
 
@@ -73,7 +74,7 @@ function formatTimestamp(value: Date | null | undefined) {
 function buildPrompt(input: DiscordAgentInput) {
   const message = input.message.trim() || "help";
   return [
-    `Discord message from ${input.userName} (${input.userId}).`,
+    `Discord message from ${input.userDisplayName} (username: ${input.userName}, id: ${input.userId}).`,
     `Guild: ${input.guildId}. Channel: ${input.channelId}.`,
     `User message: ${message}`,
   ].join("\n");
