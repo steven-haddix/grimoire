@@ -8,6 +8,7 @@ import { inArray, desc, eq } from "drizzle-orm";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { format } from "date-fns";
 import { AlertCircle, Clock, Calendar } from "lucide-react";
 
@@ -140,7 +141,21 @@ export default async function SessionsPage() {
                   <CardContent className="pt-6">
                     {latestSummary ? (
                       <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/90">
-                        <ReactMarkdown>{latestSummary.text}</ReactMarkdown>
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-6 mb-4 text-primary" {...props} />,
+                            h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-5 mb-3 text-foreground" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-base font-semibold mt-4 mb-2 text-foreground/90" {...props} />,
+                            ul: ({node, ...props}) => <ul className="list-disc pl-6 mb-4 space-y-1" {...props} />,
+                            ol: ({node, ...props}) => <ol className="list-decimal pl-6 mb-4 space-y-1" {...props} />,
+                            li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                            blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-primary/50 pl-4 italic text-muted-foreground my-4" {...props} />,
+                            code: ({node, ...props}) => <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground" {...props} />,
+                          }}
+                        >
+                          {latestSummary.text}
+                        </ReactMarkdown>
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground italic">

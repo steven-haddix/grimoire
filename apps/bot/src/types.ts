@@ -7,6 +7,7 @@ export type CommandContext = {
   channelId: string;
   userId: string;
   userName: string;
+  userDisplayName: string;
   voiceChannelId?: string;
   reply: ReplyFn;
 };
@@ -33,7 +34,10 @@ export type TranscriptSink = {
   ingest: (input: TranscriptInput) => Promise<void>;
 };
 
-export type SpeakerResolver = (userId: string) => string | undefined;
+export type SpeakerResolver = (
+  userId: string,
+  guildId: string,
+) => string | undefined;
 
 export type VoiceGateway = {
   startListening: (params: {

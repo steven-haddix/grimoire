@@ -14,6 +14,8 @@ function parseDiscordAgentPayload(value: unknown): DiscordAgentInput | null {
   const userId = typeof value.userId === "string" ? value.userId.trim() : "";
   const userName =
     typeof value.userName === "string" ? value.userName.trim() : "";
+  const userDisplayName =
+    typeof value.userDisplayName === "string" ? value.userDisplayName.trim() : "";
   const message = typeof value.message === "string" ? value.message.trim() : "";
 
   if (!guildId || !channelId || !userId || !userName) return null;
@@ -23,6 +25,7 @@ function parseDiscordAgentPayload(value: unknown): DiscordAgentInput | null {
     channelId,
     userId,
     userName,
+    userDisplayName,
     message,
   };
 }

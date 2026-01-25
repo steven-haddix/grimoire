@@ -26,6 +26,9 @@ Set env vars in `apps/web/.env` (see `apps/web/.env.example`):
 - `DATABASE_URL`
 - `OPENAI_API_KEY`
 - `BOT_SECRET`
+- `LANGFUSE_SECRET_KEY` (optional; Langfuse tracing)
+- `LANGFUSE_PUBLIC_KEY` (optional; Langfuse tracing)
+- `LANGFUSE_BASEURL` (optional; Langfuse cloud region base URL)
 - `BETTER_AUTH_SECRET`
 - `BETTER_AUTH_URL`
 - `DISCORD_CLIENT_ID`
@@ -66,7 +69,8 @@ Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 ### Vercel
 - Deploy `apps/web`.
 - Add `DATABASE_URL`, `OPENAI_API_KEY`, `BOT_SECRET`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
-  `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `NEXT_PUBLIC_DISCORD_APP_ID`.
+  `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_BASEURL`, `DISCORD_CLIENT_ID`,
+  `DISCORD_CLIENT_SECRET`, and `NEXT_PUBLIC_DISCORD_APP_ID`.
 
 ### Fly.io
 - From `apps/bot`, run `fly launch` (do not deploy yet).

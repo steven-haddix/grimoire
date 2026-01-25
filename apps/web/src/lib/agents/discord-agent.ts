@@ -10,6 +10,7 @@ export type DiscordAgentInput = {
   channelId: string;
   userId: string;
   userName: string;
+  userDisplayName: string;
   message: string;
 };
 
@@ -35,9 +36,9 @@ type SessionContext = {
   }>;
 };
 
-const MAX_REPLY_CHARS = 1800;
-const MAX_SAY_CHARS = 280;
-const DEFAULT_TRANSCRIPT_LIMIT = 25;
+const _MAX_REPLY_CHARS = 1800;
+const _MAX_SAY_CHARS = 280;
+const _DEFAULT_TRANSCRIPT_LIMIT = 25;
 
 const instructions = [
   "You are Grimoire - an ancient, sentient spellbook bound to record the tales of hapless adventurers.",
@@ -50,14 +51,14 @@ const instructions = [
   "- Be helpful, but with personality - you're sardonic, not mean.",
   "- React to critical fails with dark amusement, epic moments with grudging respect.",
   "RESPONSES:",
-  "- Brief and conversational by default (\"Ah yes, the tavern brawl. Your bard rolled a 2.\").",
-  "- Detailed only when asked (\"Give me a summary\", \"What happened last session?\").",
+  '- Brief and conversational by default ("Ah yes, the tavern brawl. Your bard rolled a 2.").',
+  '- Detailed only when asked ("Give me a summary", "What happened last session?").',
   "- When reading aloud, embrace your dramatic grimoire nature.",
   "- Never break character or mention your technical functions.",
   "MEMORY:",
   "- You contain all session transcripts and summaries for this group.",
   "- Reference past events with a knowing, slightly condescending tone.",
-  "- Make connections between sessions (\"This is the third tavern you've burned down.\").",
+  '- Make connections between sessions ("This is the third tavern you\'ve burned down.").',
   "Remember: You're not a helpful assistant - you're an immortal book of dark knowledge who happens to be documenting a D&D campaign. Act like it.",
   "Use tools to respond; prefer reply for normal text answers.",
   "Use say when the user asks to speak or read something aloud.",
@@ -73,7 +74,7 @@ function formatTimestamp(value: Date | null | undefined) {
 function buildPrompt(input: DiscordAgentInput) {
   const message = input.message.trim() || "help";
   return [
-    `Discord message from ${input.userName} (${input.userId}).`,
+    `Discord message from ${input.userDisplayName} (username: ${input.userName}, id: ${input.userId}).`,
     `Guild: ${input.guildId}. Channel: ${input.channelId}.`,
     `User message: ${message}`,
   ].join("\n");
@@ -81,17 +82,17 @@ function buildPrompt(input: DiscordAgentInput) {
 
 async function loadGuildSessionContext(
   guildId: string,
-  limit: number,
+  //limit: number,
 ): Promise<SessionContext> {
-  const [active] = await db
+  const [completed] = await db
     .select()
     .from(sessions)
-    .where(and(eq(sessions.guildId, guildId), eq(sessions.status, "active")))
-    .orderBy(desc(sessions.startedAt))
+    .where(and(eq(sessions.guildId, guildId), eq(sessions.status, "completed")))
+    .orderBy(desc(sessions.endedAt), desc(sessions.startedAt))
     .limit(1);
 
-  const [latest] = active
-    ? [active]
+  const [latest] = completed
+    ? [completed]
     : await db
         .select()
         .from(sessions)
@@ -121,8 +122,7 @@ async function loadGuildSessionContext(
     .select()
     .from(transcripts)
     .where(eq(transcripts.sessionId, latest.id))
-    .orderBy(desc(transcripts.timestamp))
-    .limit(limit);
+    .orderBy(desc(transcripts.timestamp));
 
   const transcriptsOrdered = [...transcriptRows].reverse().map((row) => ({
     speaker: row.speaker,
@@ -150,16 +150,25 @@ function createDiscordAgent(params: {
     model: google("gemini-3-flash-preview"),
     instructions,
     stopWhen: stepCountIs(6),
+    experimental_telemetry: {
+      isEnabled: true,
+      functionId: "discord-agent",
+      metadata: {
+        guildId: input.guildId,
+        channelId: input.channelId,
+        userId: input.userId,
+      },
+    },
     tools: {
       reply: tool({
         description: "Send a text response back to the Discord user.",
         inputSchema: z.object({
-          content: z.string().min(1).max(4000),
+          content: z.string().min(1),
         }),
         execute: async ({ content }) => {
           actions.push({
             type: "reply",
-            content: content.trim().slice(0, MAX_REPLY_CHARS),
+            content: content.trim(),
           });
           return { ok: true };
         },
@@ -167,13 +176,13 @@ function createDiscordAgent(params: {
       say: tool({
         description: "Speak a short message aloud in the guild voice channel.",
         inputSchema: z.object({
-          text: z.string().min(1).max(1200),
+          text: z.string(),
           voice: z.string().min(1).optional(),
         }),
         execute: async ({ text, voice }) => {
           actions.push({
             type: "say",
-            text: text.trim().slice(0, MAX_SAY_CHARS),
+            text: text,
             voice: voice?.trim() || undefined,
           });
           return { ok: true };
@@ -186,8 +195,11 @@ function createDiscordAgent(params: {
           limit: z.number().int().min(1).max(50).optional(),
         }),
         execute: async ({ limit }) => {
-          const safeLimit = limit ?? DEFAULT_TRANSCRIPT_LIMIT;
-          return loadGuildSessionContext(input.guildId, safeLimit);
+          //const safeLimit = limit ?? DEFAULT_TRANSCRIPT_LIMIT;
+          return loadGuildSessionContext(
+            input.guildId,
+            //safeLimit
+          );
         },
       }),
     },
@@ -203,8 +215,14 @@ export async function runDiscordAgent(
   const text = result.text?.trim();
 
   if (!actions.length && text) {
-    actions.push({ type: "reply", content: text.slice(0, MAX_REPLY_CHARS) });
+    actions.push({ type: "reply", content: text });
   }
+
+  console.log({
+    discordAgentInput: input,
+    discordAgentActions: actions,
+    discordAgentText: text,
+  });
 
   return {
     actions,

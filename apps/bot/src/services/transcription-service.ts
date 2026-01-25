@@ -45,6 +45,7 @@ export class TranscriptionService {
     this.processStream({
       streamKey,
       sessionId,
+      guildId: params.guildId,
       userId: params.userId,
       stream: params.stream,
     });
@@ -61,6 +62,7 @@ export class TranscriptionService {
   private processStream(params: {
     streamKey: string;
     sessionId: number;
+    guildId: string;
     userId: string;
     stream: Readable;
   }) {
@@ -103,7 +105,8 @@ export class TranscriptionService {
         const text = result.text.trim();
         if (!text) return;
 
-        const speaker = this.resolveSpeaker(params.userId) ?? "Unknown";
+        const speaker =
+          this.resolveSpeaker(params.userId, params.guildId) ?? "Unknown";
         this.sink
           .ingest({
             sessionId: params.sessionId,

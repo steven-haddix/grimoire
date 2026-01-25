@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Alegreya, Cinzel } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const cinzel = Cinzel({
   subsets: ["latin"],
@@ -31,7 +32,9 @@ export default function RootLayout({
       className={`${cinzel.variable} ${alegreya.variable}`}
       suppressHydrationWarning
     >
-      <body className="text-ink antialiased">{children}</body>
+      <body className="text-foreground antialiased">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

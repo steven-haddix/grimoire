@@ -1,10 +1,10 @@
 import { REST, Routes, SlashCommandBuilder } from "discord.js";
 import type { BotConfig } from "../config";
 
-export function buildCommands() {
+export function buildGrimCommands() {
   return [
     new SlashCommandBuilder()
-      .setName("scribe")
+      .setName("grim")
       .setDescription("Transcribe sessions and control playback")
       .addSubcommand((sub) =>
         sub
@@ -55,7 +55,9 @@ export function buildCommands() {
             opt.setName("description").setDescription("Campaign description"),
           ),
       )
-      .addSubcommand((sub) => sub.setName("list").setDescription("List campaigns"))
+      .addSubcommand((sub) =>
+        sub.setName("list").setDescription("List campaigns"),
+      )
       .addSubcommand((sub) =>
         sub
           .setName("select")
@@ -72,12 +74,14 @@ export function buildCommands() {
 
 export async function registerSlashCommands(config: BotConfig) {
   if (!config.discordAppId) {
-    console.warn("DISCORD_APP_ID not set; skipping slash command registration.");
+    console.warn(
+      "DISCORD_APP_ID not set; skipping slash command registration.",
+    );
     return;
   }
 
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
   await rest.put(Routes.applicationCommands(config.discordAppId), {
-    body: buildCommands(),
+    body: buildGrimCommands(),
   });
 }

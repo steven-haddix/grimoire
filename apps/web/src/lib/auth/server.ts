@@ -6,12 +6,18 @@ import * as schema from "../../db/schema";
 
 // Dynamically determine the base URL for Vercel preview deployments
 const getBaseURL = () => {
+  // Prefer explicit URLs so custom domains win over Vercel's deployment host.
+  const explicitUrl =
+    process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_SITE_URL;
+  if (explicitUrl) {
+    return explicitUrl;
+  }
   // For Vercel deployments (preview or production)
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }
-  // Fallback to BETTER_AUTH_URL or localhost
-  return process.env.BETTER_AUTH_URL || "http://localhost:3000";
+  // Fallback to localhost
+  return "http://localhost:3000";
 };
 
 export const auth = betterAuth({
@@ -34,7 +40,8 @@ export const auth = betterAuth({
   trustedOrigins: [
     getBaseURL(),
     "http://localhost:3000",
-    "https://*.vercel.app"
+    "https://www.grimoire.bot",
+    "https://*.vercel.app",
   ],
   secret: process.env.BETTER_AUTH_SECRET,
   socialProviders: {
