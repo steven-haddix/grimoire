@@ -12,14 +12,14 @@ const items = [
     icon: LayoutDashboard,
   },
   {
-    title: "Summaries",
-    href: "/account/sessions",
-    icon: FileText,
-  },
-  {
     title: "Campaigns",
     href: "/account/campaigns",
     icon: Map,
+  },
+  {
+    title: "Summaries",
+    href: "/account/sessions",
+    icon: FileText,
   },
 ];
 
