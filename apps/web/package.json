@@ -47,6 +47,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@vercel/otel": "^2.1.0",
+    "@upstash/redis": "^1.36.1",
     "ai": "^6.0.33",
     "better-auth": "^1.4.13",
     "class-variance-authority": "^0.7.1",

@@ -90,3 +90,35 @@ export async function setActiveCampaign(campaignId: number, guildId: string) {
   revalidatePath("/account/campaigns");
   return { success: true };
 }
+
+export async function deleteCampaign(campaignId: number, guildId: string) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) throw new Error("Unauthorized");
+
+  // Verify user has admin access to this guild
+  const adminGuilds = await getUserAdminGuilds();
+  const hasAccess = adminGuilds.some((g) => g.id === guildId);
+
+  if (!hasAccess) {
+    throw new Error("Unauthorized access to guild");
+  }
+
+  // Check if it's the active campaign
+  const guildSettings = await db.query.botGuilds.findFirst({
+    where: eq(botGuilds.guildId, guildId),
+  });
+
+  if (guildSettings?.activeCampaignId === campaignId) {
+    await db
+      .update(botGuilds)
+      .set({ activeCampaignId: null })
+      .where(eq(botGuilds.guildId, guildId));
+  }
+
+  await db
+    .delete(campaigns)
+    .where(and(eq(campaigns.id, campaignId), eq(campaigns.guildId, guildId)));
+
+  revalidatePath("/account/campaigns");
+  return { success: true };
+}
