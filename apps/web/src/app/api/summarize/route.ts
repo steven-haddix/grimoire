@@ -3,7 +3,7 @@ import { generateText } from "ai";
 import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { sessions, summaries, transcripts } from "@/db/schema";
+import { campaigns, sessions, summaries, transcripts } from "@/db/schema";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -41,6 +41,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
+  const [session] = await db
+    .select({
+      id: sessions.id,
+      campaignId: sessions.campaignId,
+    })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (!session) {
+    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  }
+
+  const campaign = session.campaignId
+    ? await db
+        .select({
+          name: campaigns.name,
+          description: campaigns.description,
+        })
+        .from(campaigns)
+        .where(eq(campaigns.id, session.campaignId))
+        .then((rows) => rows[0] ?? null)
+    : null;
+
   const lines = await db
     .select()
     .from(transcripts)
@@ -58,16 +82,22 @@ export async function POST(req: Request) {
     )
     .join("\n");
 
+  const campaignContext = campaign
+    ? `\n\nCAMPAIGN CONTEXT:\nCampaign Name: ${campaign.name}${campaign.description ? `\nCampaign Description: ${campaign.description}` : ""}\n\nUse this campaign context to better understand the setting, characters, and ongoing storylines when summarizing the session.`
+    : "";
+
   const { text } = await generateText({
     model: google("gemini-3-flash-preview"),
     system:
       "You are a D&D scribe. Summarize the session with sections for Plot, Combat, and Loot.",
-    prompt: `TRANSCRIPT:\n${script}`,
+    prompt: `${campaignContext ? `${campaignContext}\n\n` : ""}TRANSCRIPT:\n${script}`,
     experimental_telemetry: {
       isEnabled: true,
       functionId: "summarize-session",
       metadata: {
         sessionId,
+        ...(session.campaignId && { campaignId: session.campaignId }),
+        ...(campaign?.name && { campaignName: campaign.name }),
       },
     },
     providerOptions: {

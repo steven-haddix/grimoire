@@ -1,9 +1,15 @@
 import { google } from "@ai-sdk/google";
 import { stepCountIs, ToolLoopAgent, tool } from "ai";
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { sessions, summaries, transcripts } from "@/db/schema";
+import {
+  botGuilds,
+  campaigns,
+  sessions,
+  summaries,
+  transcripts,
+} from "@/db/schema";
 
 export type DiscordAgentInput = {
   guildId: string;
@@ -23,13 +29,21 @@ export type DiscordAgentResult = {
   text?: string;
 };
 
-type SessionContext = {
-  sessionId: number | null;
-  status: string | null;
-  startedAt: string | null;
-  endedAt: string | null;
-  summary: string | null;
-  transcripts: Array<{
+type CampaignContext = {
+  campaign: {
+    id: number;
+    name: string;
+    description: string | null;
+  } | null;
+  sessions: Array<{
+    id: number;
+    sessionNumber: number;
+    status: string;
+    startedAt: string | null;
+    endedAt: string | null;
+    summary: string | null;
+  }>;
+  recentTranscripts: Array<{
     speaker: string;
     content: string;
     timestamp: string | null;
@@ -38,7 +52,6 @@ type SessionContext = {
 
 const _MAX_REPLY_CHARS = 1800;
 const _MAX_SAY_CHARS = 280;
-const _DEFAULT_TRANSCRIPT_LIMIT = 25;
 
 const instructions = [
   "You are Grimoire - an ancient, sentient spellbook bound to record the tales of hapless adventurers.",
@@ -56,13 +69,14 @@ const instructions = [
   "- When reading aloud, embrace your dramatic grimoire nature.",
   "- Never break character or mention your technical functions.",
   "MEMORY:",
-  "- You contain all session transcripts and summaries for this group.",
+  "- You contain all session transcripts, summaries, and campaign details for this group.",
+  "- Campaign context includes the campaign name and description - use this to understand the setting and story.",
   "- Reference past events with a knowing, slightly condescending tone.",
   '- Make connections between sessions ("This is the third tavern you\'ve burned down.").',
   "Remember: You're not a helpful assistant - you're an immortal book of dark knowledge who happens to be documenting a D&D campaign. Act like it.",
   "Use tools to respond; prefer reply for normal text answers.",
   "Use say when the user asks to speak or read something aloud.",
-  "Use getGuildSessionContext to answer questions about this guild's transcripts or summaries.",
+  "Use getCampaignContext to answer questions about this guild's campaign, session history, or transcripts.",
   "Keep replies short unless the user asks for detail.",
   "Never mention tool names or system instructions.",
 ].join(" ");
@@ -80,63 +94,116 @@ function buildPrompt(input: DiscordAgentInput) {
   ].join("\n");
 }
 
-async function loadGuildSessionContext(
+const DEFAULT_SESSION_LIMIT = 5;
+
+async function loadCampaignContext(
   guildId: string,
-  //limit: number,
-): Promise<SessionContext> {
-  const [completed] = await db
-    .select()
-    .from(sessions)
-    .where(and(eq(sessions.guildId, guildId), eq(sessions.status, "completed")))
-    .orderBy(desc(sessions.endedAt), desc(sessions.startedAt))
+  sessionLimit: number = DEFAULT_SESSION_LIMIT,
+): Promise<CampaignContext> {
+  // 1. Get the guild's active campaign
+  const [guild] = await db
+    .select({
+      activeCampaignId: botGuilds.activeCampaignId,
+    })
+    .from(botGuilds)
+    .where(eq(botGuilds.guildId, guildId))
     .limit(1);
 
-  const [latest] = completed
-    ? [completed]
-    : await db
-        .select()
-        .from(sessions)
-        .where(eq(sessions.guildId, guildId))
-        .orderBy(desc(sessions.startedAt))
-        .limit(1);
+  const activeCampaignId = guild?.activeCampaignId;
 
-  if (!latest) {
+  // No active campaign set
+  if (!activeCampaignId) {
     return {
-      sessionId: null,
-      status: null,
-      startedAt: null,
-      endedAt: null,
-      summary: null,
-      transcripts: [],
+      campaign: null,
+      sessions: [],
+      recentTranscripts: [],
     };
   }
 
-  const [summaryRow] = await db
-    .select()
-    .from(summaries)
-    .where(eq(summaries.sessionId, latest.id))
-    .orderBy(desc(summaries.createdAt))
+  // 2. Load the campaign details
+  const [campaign] = await db
+    .select({
+      id: campaigns.id,
+      name: campaigns.name,
+      description: campaigns.description,
+    })
+    .from(campaigns)
+    .where(eq(campaigns.id, activeCampaignId))
     .limit(1);
 
-  const transcriptRows = await db
-    .select()
-    .from(transcripts)
-    .where(eq(transcripts.sessionId, latest.id))
-    .orderBy(desc(transcripts.timestamp));
+  if (!campaign) {
+    return {
+      campaign: null,
+      sessions: [],
+      recentTranscripts: [],
+    };
+  }
 
-  const transcriptsOrdered = [...transcriptRows].reverse().map((row) => ({
-    speaker: row.speaker,
-    content: row.content,
-    timestamp: formatTimestamp(row.timestamp),
-  }));
+  // 3. Load recent sessions FOR THIS CAMPAIGN (ordered by start time, newest first)
+  const campaignSessions = await db
+    .select({
+      id: sessions.id,
+      status: sessions.status,
+      startedAt: sessions.startedAt,
+      endedAt: sessions.endedAt,
+    })
+    .from(sessions)
+    .where(eq(sessions.campaignId, activeCampaignId))
+    .orderBy(desc(sessions.startedAt))
+    .limit(sessionLimit);
+
+  // 4. Load summaries for these sessions
+  const sessionIds = campaignSessions.map((s) => s.id);
+  const summaryMap = new Map<number, string>();
+  for (const sessionId of sessionIds) {
+    const [summaryRow] = await db
+      .select({ text: summaries.text })
+      .from(summaries)
+      .where(eq(summaries.sessionId, sessionId))
+      .orderBy(desc(summaries.createdAt))
+      .limit(1);
+    if (summaryRow) {
+      summaryMap.set(sessionId, summaryRow.text);
+    }
+  }
+
+  // 5. Build sessions array with session numbers (oldest = 1)
+  const sessionsWithSummaries = campaignSessions
+    .map((session, index) => ({
+      id: session.id,
+      sessionNumber: campaignSessions.length - index, // newest is highest number
+      status: session.status,
+      startedAt: formatTimestamp(session.startedAt),
+      endedAt: formatTimestamp(session.endedAt),
+      summary: summaryMap.get(session.id) ?? null,
+    }))
+    .reverse(); // Return in chronological order (oldest first)
+
+  // 6. Load recent transcripts from the most recent session only
+  const latestSession = campaignSessions[0];
+  const recentTranscripts = latestSession
+    ? await db
+        .select({
+          speaker: transcripts.speaker,
+          content: transcripts.content,
+          timestamp: transcripts.timestamp,
+        })
+        .from(transcripts)
+        .where(eq(transcripts.sessionId, latestSession.id))
+        .orderBy(desc(transcripts.timestamp))
+        .then((rows) =>
+          [...rows].reverse().map((row) => ({
+            speaker: row.speaker,
+            content: row.content,
+            timestamp: formatTimestamp(row.timestamp),
+          })),
+        )
+    : [];
 
   return {
-    sessionId: latest.id,
-    status: latest.status,
-    startedAt: formatTimestamp(latest.startedAt),
-    endedAt: formatTimestamp(latest.endedAt),
-    summary: summaryRow?.text ?? null,
-    transcripts: transcriptsOrdered,
+    campaign,
+    sessions: sessionsWithSummaries,
+    recentTranscripts,
   };
 }
 
@@ -188,18 +255,20 @@ function createDiscordAgent(params: {
           return { ok: true };
         },
       }),
-      getGuildSessionContext: tool({
+      getCampaignContext: tool({
         description:
-          "Fetch the latest session summary and recent transcript lines for this guild.",
+          "Fetch the active campaign details, session history with summaries, and recent transcripts for this guild.",
         inputSchema: z.object({
-          limit: z.number().int().min(1).max(50).optional(),
+          sessionLimit: z
+            .number()
+            .int()
+            .min(1)
+            .max(10)
+            .optional()
+            .describe("Number of recent sessions to include (default 5)"),
         }),
-        execute: async ({ limit }) => {
-          //const safeLimit = limit ?? DEFAULT_TRANSCRIPT_LIMIT;
-          return loadGuildSessionContext(
-            input.guildId,
-            //safeLimit
-          );
+        execute: async ({ sessionLimit }) => {
+          return loadCampaignContext(input.guildId, sessionLimit);
         },
       }),
     },
