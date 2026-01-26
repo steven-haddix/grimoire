@@ -6,6 +6,8 @@ import { db } from "@/db";
 import {
   botGuilds,
   campaigns,
+  chatMessages,
+  memories,
   sessions,
   summaries,
   transcripts,
@@ -48,7 +50,25 @@ type CampaignContext = {
     content: string;
     timestamp: string | null;
   }>;
+  memories: Array<{
+    id: number;
+    content: string;
+    category: string;
+    source: string | null;
+    createdAt: string | null;
+  }>;
+  recentChatMessages: Array<{
+    displayName: string;
+    content: string;
+    isBot: boolean;
+    createdAt: string | null;
+  }>;
 };
+
+const MEMORY_CATEGORIES = ["lore", "character", "rule", "meta", "other"] as const;
+type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+
+const DEFAULT_CHAT_MESSAGE_LIMIT = 25;
 
 const _MAX_REPLY_CHARS = 1800;
 const _MAX_SAY_CHARS = 280;
@@ -73,6 +93,12 @@ const instructions = [
   "- Campaign context includes the campaign name and description - use this to understand the setting and story.",
   "- Reference past events with a knowing, slightly condescending tone.",
   '- Make connections between sessions ("This is the third tavern you\'ve burned down.").',
+  "REMEMBERING FACTS:",
+  "- Use rememberFact when users explicitly ask you to remember something (e.g., 'remember that...', 'keep in mind...').",
+  "- Also use rememberFact to store important facts you encounter: character names, NPC details, locations, relationships, lore.",
+  "- Categories: 'character' for PCs/NPCs/traits, 'lore' for world/history/places, 'rule' for house rules/homebrew, 'meta' for scheduling/preferences, 'other' for misc.",
+  "- Don't remember: jokes, casual chatter, questions, or speculation. When uncertain, don't remember - users can ask explicitly.",
+  "- When you remember something, briefly acknowledge it in character ('I've inscribed that into my pages.').",
   "Remember: You're not a helpful assistant - you're an immortal book of dark knowledge who happens to be documenting a D&D campaign. Act like it.",
   "Use tools to respond; prefer reply for normal text answers.",
   "Use say when the user asks to speak or read something aloud.",
@@ -117,6 +143,8 @@ async function loadCampaignContext(
       campaign: null,
       sessions: [],
       recentTranscripts: [],
+      memories: [],
+      recentChatMessages: [],
     };
   }
 
@@ -136,6 +164,8 @@ async function loadCampaignContext(
       campaign: null,
       sessions: [],
       recentTranscripts: [],
+      memories: [],
+      recentChatMessages: [],
     };
   }
 
@@ -200,18 +230,67 @@ async function loadCampaignContext(
         )
     : [];
 
+  // 7. Load all memories for this campaign
+  const campaignMemories = await db
+    .select({
+      id: memories.id,
+      content: memories.content,
+      category: memories.category,
+      source: memories.source,
+      createdAt: memories.createdAt,
+    })
+    .from(memories)
+    .where(eq(memories.campaignId, activeCampaignId))
+    .orderBy(desc(memories.createdAt));
+
+  // 8. Load recent chat messages for this campaign
+  const recentChatMessagesData = await db
+    .select({
+      displayName: chatMessages.displayName,
+      content: chatMessages.content,
+      isBot: chatMessages.isBot,
+      createdAt: chatMessages.createdAt,
+    })
+    .from(chatMessages)
+    .where(eq(chatMessages.campaignId, activeCampaignId))
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(DEFAULT_CHAT_MESSAGE_LIMIT);
+
   return {
     campaign,
     sessions: sessionsWithSummaries,
     recentTranscripts,
+    memories: campaignMemories.map((m) => ({
+      id: m.id,
+      content: m.content,
+      category: m.category,
+      source: m.source,
+      createdAt: formatTimestamp(m.createdAt),
+    })),
+    recentChatMessages: [...recentChatMessagesData].reverse().map((m) => ({
+      displayName: m.displayName,
+      content: m.content,
+      isBot: m.isBot,
+      createdAt: formatTimestamp(m.createdAt),
+    })),
   };
+}
+
+async function getActiveCampaignId(guildId: string): Promise<number | null> {
+  const [guild] = await db
+    .select({ activeCampaignId: botGuilds.activeCampaignId })
+    .from(botGuilds)
+    .where(eq(botGuilds.guildId, guildId))
+    .limit(1);
+  return guild?.activeCampaignId ?? null;
 }
 
 function createDiscordAgent(params: {
   input: DiscordAgentInput;
   actions: DiscordAgentAction[];
+  activeCampaignId: number | null;
 }) {
-  const { input, actions } = params;
+  const { input, actions, activeCampaignId } = params;
 
   return new ToolLoopAgent({
     model: google("gemini-3-flash-preview"),
@@ -271,6 +350,37 @@ function createDiscordAgent(params: {
           return loadCampaignContext(input.guildId, sessionLimit);
         },
       }),
+      rememberFact: tool({
+        description:
+          "Store an important fact to remember for this campaign. Use for lore, character details, rules, or anything worth preserving.",
+        inputSchema: z.object({
+          content: z.string().min(1).describe("The fact to remember"),
+          category: z
+            .enum(MEMORY_CATEGORIES)
+            .describe(
+              "Category: 'character' for PCs/NPCs, 'lore' for world/places, 'rule' for house rules, 'meta' for scheduling/preferences, 'other' for misc",
+            ),
+          source: z
+            .string()
+            .optional()
+            .describe("Who provided this information (defaults to message sender)"),
+        }),
+        execute: async ({ content, category, source }) => {
+          if (!activeCampaignId) {
+            return {
+              ok: false,
+              error: "No active campaign. Cannot store memories without a campaign.",
+            };
+          }
+          await db.insert(memories).values({
+            campaignId: activeCampaignId,
+            content: content.trim(),
+            category,
+            source: source?.trim() || input.userDisplayName || input.userName,
+          });
+          return { ok: true };
+        },
+      }),
     },
   });
 }
@@ -278,13 +388,45 @@ function createDiscordAgent(params: {
 export async function runDiscordAgent(
   input: DiscordAgentInput,
 ): Promise<DiscordAgentResult> {
+  // Get active campaign for this guild
+  const activeCampaignId = await getActiveCampaignId(input.guildId);
+
+  // Store the user's incoming message (if campaign is active)
+  if (activeCampaignId) {
+    await db.insert(chatMessages).values({
+      campaignId: activeCampaignId,
+      guildId: input.guildId,
+      channelId: input.channelId,
+      userId: input.userId,
+      displayName: input.userDisplayName || input.userName,
+      content: input.message,
+      isBot: false,
+    });
+  }
+
   const actions: DiscordAgentAction[] = [];
-  const agent = createDiscordAgent({ input, actions });
+  const agent = createDiscordAgent({ input, actions, activeCampaignId });
   const result = await agent.generate({ prompt: buildPrompt(input) });
   const text = result.text?.trim();
 
   if (!actions.length && text) {
     actions.push({ type: "reply", content: text });
+  }
+
+  // Store the bot's response (if campaign is active)
+  if (activeCampaignId) {
+    const replyAction = actions.find((a) => a.type === "reply");
+    if (replyAction && replyAction.type === "reply") {
+      await db.insert(chatMessages).values({
+        campaignId: activeCampaignId,
+        guildId: input.guildId,
+        channelId: input.channelId,
+        userId: "bot",
+        displayName: "Grimoire",
+        content: replyAction.content,
+        isBot: true,
+      });
+    }
   }
 
   console.log({

@@ -64,8 +64,35 @@ export const summaries = pgTable("summaries", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const memories = pgTable("memories", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => campaigns.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  category: text("category").notNull(), // lore, character, rule, meta, other
+  source: text("source"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const chatMessages = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => campaigns.id, { onDelete: "cascade" }),
+  guildId: text("guild_id").notNull(),
+  channelId: text("channel_id").notNull(),
+  userId: text("user_id").notNull(),
+  displayName: text("display_name").notNull(),
+  content: text("content").notNull(),
+  isBot: boolean("is_bot").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const campaignsRelations = relations(campaigns, ({ many }) => ({
   sessions: many(sessions),
+  memories: many(memories),
+  chatMessages: many(chatMessages),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
@@ -95,6 +122,20 @@ export const summariesRelations = relations(summaries, ({ one }) => ({
   session: one(sessions, {
     fields: [summaries.sessionId],
     references: [sessions.id],
+  }),
+}));
+
+export const memoriesRelations = relations(memories, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [memories.campaignId],
+    references: [campaigns.id],
+  }),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [chatMessages.campaignId],
+    references: [campaigns.id],
   }),
 }));
 
