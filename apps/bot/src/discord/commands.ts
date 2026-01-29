@@ -7,35 +7,12 @@ import type {
 import { MessageFlags } from "discord.js";
 import type { BotController } from "../services/bot-controller";
 import type { CommandContext, CommandIntent } from "../types";
+import { splitMessage } from "./utils";
 
 export type CommandRouter = {
   handleInteraction: (interaction: Interaction) => Promise<void>;
   handleMessage: (msg: Message) => Promise<void>;
 };
-
-function splitMessage(text: string, maxLength = 2000): string[] {
-  if (text.length <= maxLength) return [text];
-  const chunks = [];
-
-  while (text.length > maxLength) {
-    let splitAt = text.lastIndexOf("\n", maxLength);
-    if (splitAt === -1) {
-      splitAt = text.lastIndexOf(" ", maxLength);
-    }
-    if (splitAt === -1) {
-      splitAt = maxLength;
-    }
-
-    chunks.push(text.substring(0, splitAt));
-    text = text.substring(splitAt).trimStart();
-  }
-
-  if (text.length > 0) {
-    chunks.push(text);
-  }
-
-  return chunks;
-}
 
 export function createCommandRouter(params: {
   controller: BotController;
