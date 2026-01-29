@@ -13,6 +13,30 @@ export type CommandRouter = {
   handleMessage: (msg: Message) => Promise<void>;
 };
 
+function splitMessage(text: string, maxLength = 2000): string[] {
+  if (text.length <= maxLength) return [text];
+  const chunks = [];
+
+  while (text.length > maxLength) {
+    let splitAt = text.lastIndexOf("\n", maxLength);
+    if (splitAt === -1) {
+      splitAt = text.lastIndexOf(" ", maxLength);
+    }
+    if (splitAt === -1) {
+      splitAt = maxLength;
+    }
+
+    chunks.push(text.substring(0, splitAt));
+    text = text.substring(splitAt).trimStart();
+  }
+
+  if (text.length > 0) {
+    chunks.push(text);
+  }
+
+  return chunks;
+}
+
 export function createCommandRouter(params: {
   controller: BotController;
 }): CommandRouter {
@@ -26,7 +50,10 @@ export function createCommandRouter(params: {
     userDisplayName: msg.member?.displayName ?? msg.author.username,
     voiceChannelId: msg.member?.voice.channel?.id ?? undefined,
     reply: async (content) => {
-      await msg.reply(content);
+      const chunks = splitMessage(content);
+      for (const chunk of chunks) {
+        await msg.reply(chunk);
+      }
     },
   });
 
@@ -47,25 +74,37 @@ export function createCommandRouter(params: {
       userDisplayName: member?.displayName ?? interaction.user.username,
       voiceChannelId: member?.voice.channelId ?? undefined,
       reply: async (content) => {
+        const chunks = splitMessage(content);
+
         if (replyStrategy === "edit") {
+          const firstChunk = chunks[0];
           if (interaction.deferred || interaction.replied) {
-            await interaction.editReply(content);
+            await interaction.editReply(firstChunk);
           } else {
-            await interaction.reply(content);
+            await interaction.reply(firstChunk);
+          }
+
+          for (let i = 1; i < chunks.length; i++) {
+            await interaction.followUp({
+              content: chunks[i],
+            });
           }
           return;
         }
 
-        if (interaction.deferred || interaction.replied) {
-          await interaction.followUp({
-            content,
-            flags: MessageFlags.Ephemeral,
-          });
-        } else {
-          await interaction.reply({
-            content,
-            flags: MessageFlags.Ephemeral,
-          });
+        // Strategy: followUp
+        for (const chunk of chunks) {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.followUp({
+              content: chunk,
+              flags: MessageFlags.Ephemeral,
+            });
+          } else {
+            await interaction.reply({
+              content: chunk,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
         }
       },
     };
