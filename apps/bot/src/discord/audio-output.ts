@@ -15,6 +15,8 @@ type SpeakJob = {
   reject: (err: unknown) => void;
 };
 
+import { BufferedAudioStream } from "./audio-utils";
+
 export class GuildSpeechQueue {
   private queue: SpeakJob[] = [];
   private processing = false;
@@ -90,7 +92,16 @@ export class GuildSpeechQueue {
             { text: job.text, voice: job.voice },
             { signal: ac.signal },
           );
-          const resource = createAudioResource(pcm, {
+
+          // Buffer audio to prevent stuttering (initial word -> pause -> rest)
+          const bufferedPcm = pcm.pipe(
+            new BufferedAudioStream({
+              bufferDurationMs: 600, // Wait for 600ms of audio before starting
+              silenceDurationMs: 200, // Prepend 200ms of silence
+            }),
+          );
+
+          const resource = createAudioResource(bufferedPcm, {
             inputType: StreamType.Raw,
           });
 
