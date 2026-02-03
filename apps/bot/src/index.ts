@@ -12,7 +12,8 @@ import { TranscriptionService } from "./services/transcription-service";
 import { TtsService } from "./services/tts-service";
 import { startBotHttpServer } from "./server/http";
 import { createSttProviderFromEnv } from "./stt";
-import { createTtsProviderFromEnv } from "./tts";
+import { createAllTtsProvidersFromEnv } from "./tts";
+import { VoicePersonaManager } from "./tts/voice-personas";
 
 const DEFAULT_STT_CONFIG = {
   model: "nova-3",
@@ -39,7 +40,13 @@ const stt = new SttService(
   createSttProviderFromEnv(process.env),
   DEFAULT_STT_CONFIG,
 );
-const tts = new TtsService(createTtsProviderFromEnv(process.env));
+
+const personaManager = new VoicePersonaManager();
+const tts = new TtsService(personaManager);
+createAllTtsProvidersFromEnv(process.env).forEach((p) =>
+  tts.registerProvider(p),
+);
+
 const transcription = new TranscriptionService(
   stt,
   { ingest: api.ingestTranscript },
