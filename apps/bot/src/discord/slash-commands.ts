@@ -34,7 +34,9 @@ export function buildGrimCommands() {
           .addStringOption((opt) =>
             opt
               .setName("voice")
-              .setDescription("Optional voice id for the TTS provider")
+              .setDescription(
+                "Optional voice persona name (e.g. narrator, wizard)",
+              )
               .setRequired(false),
           ),
       ),

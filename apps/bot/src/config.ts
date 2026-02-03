@@ -43,7 +43,7 @@ export function loadConfig(
     throw new Error("Invalid BOT_HTTP_PORT/PORT value");
   }
 
-  const ttsVoice = env.TTS_VOICE ?? "aura-asteria-en";
+  const ttsVoice = env.TTS_VOICE ?? "narrator";
   const ttsVoiceOptions = parseVoiceOptions(env.TTS_VOICE_OPTIONS);
 
   const discordAppId =

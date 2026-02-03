@@ -71,6 +71,31 @@ export function normalizeToDiscordPcm(input: {
   return out;
 }
 
+export function createAllTtsProvidersFromEnv(
+  env: Record<string, string | undefined>,
+): TtsProvider[] {
+  const providers: TtsProvider[] = [];
+
+  if (env.ELEVENLABS_API_KEY) {
+    providers.push(new ElevenLabsTtsProvider(env.ELEVENLABS_API_KEY));
+  }
+
+  if (env.CARTESIA_API_KEY) {
+    providers.push(
+      new CartesiaTtsProvider(
+        env.CARTESIA_API_KEY,
+        env.CARTESIA_BASE_URL ?? "https://api.cartesia.ai",
+      ),
+    );
+  }
+
+  if (env.DEEPGRAM_API_KEY) {
+    providers.push(new DeepgramTtsProvider(env.DEEPGRAM_API_KEY));
+  }
+
+  return providers;
+}
+
 export function createTtsProviderFromEnv(
   env: Record<string, string | undefined>,
 ): TtsProvider {

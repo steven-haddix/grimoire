@@ -1,0 +1,25 @@
+{
+  "default": "narrator",
+  "personas": {
+    "narrator": {
+      "provider": "deepgram",
+      "voiceId": "aura-asteria-en",
+      "options": {}
+    },
+    "wizard": {
+      "provider": "deepgram",
+      "voiceId": "aura-orion-en",
+      "options": {}
+    },
+    "soldier": {
+      "provider": "deepgram",
+      "voiceId": "aura-angus-en",
+      "options": {}
+    },
+    "barkeeper": {
+      "provider": "deepgram",
+      "voiceId": "aura-arcas-en",
+      "options": {}
+    }
+  }
+}
