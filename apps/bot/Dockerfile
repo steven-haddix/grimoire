@@ -11,7 +11,7 @@ RUN apt-get update \
     libopus-dev \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json bun.lock* ./
+COPY package.json bun.lock* personas.json ./
 COPY src ./src
 
 RUN bun install --production

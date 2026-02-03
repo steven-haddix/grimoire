@@ -1,6 +1,6 @@
 import type { Readable } from "node:stream";
 
-export type TtsProviderName = "cartesia" | "elevenlabs" | "deepgram";
+export type TtsProviderName = "cartesia" | "elevenlabs" | "deepgram" | "inworld";
 
 export type TtsVoiceConfig = {
   voice: string;

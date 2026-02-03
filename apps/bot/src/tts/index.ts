@@ -3,6 +3,7 @@ import type { Readable } from "node:stream";
 import { CartesiaTtsProvider } from "./providers/cartesia";
 import { DeepgramTtsProvider } from "./providers/deepgram";
 import { ElevenLabsTtsProvider } from "./providers/elevenlabs";
+import { InworldTtsProvider } from "./providers/inworld";
 import type { TtsPcmFormat, TtsProvider, TtsProviderName } from "./types";
 
 export type {
@@ -93,6 +94,10 @@ export function createAllTtsProvidersFromEnv(
     providers.push(new DeepgramTtsProvider(env.DEEPGRAM_API_KEY));
   }
 
+  if (env.INWORLD_API_KEY) {
+    providers.push(new InworldTtsProvider(env.INWORLD_API_KEY));
+  }
+
   return providers;
 }
 
@@ -114,6 +119,12 @@ export function createTtsProviderFromEnv(
       key,
       env.CARTESIA_BASE_URL ?? "https://api.cartesia.ai",
     );
+  }
+
+  if (provider === "inworld") {
+    const key = env.INWORLD_API_KEY;
+    if (!key) throw new Error("Missing INWORLD_API_KEY");
+    return new InworldTtsProvider(key);
   }
 
   const key = env.DEEPGRAM_API_KEY;

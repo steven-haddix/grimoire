@@ -17,19 +17,22 @@ export class VoicePersonaManager {
   private config: VoicePersonaMap;
 
   constructor(configPath?: string) {
-    const defaultPath = path.join(process.cwd(), "apps/bot/personas.json");
+    const defaultPath = path.resolve(import.meta.dir, "../../personas.json");
     const finalPath = configPath || defaultPath;
-    
+
     try {
       const raw = fs.readFileSync(finalPath, "utf-8");
       this.config = JSON.parse(raw);
     } catch (error) {
-      console.warn(`Failed to load personas from ${finalPath}, using defaults.`, error);
+      console.warn(
+        `Failed to load personas from ${finalPath}, using defaults.`,
+        error,
+      );
       this.config = {
         default: "narrator",
         personas: {
-          narrator: { provider: "deepgram", voiceId: "aura-asteria-en" }
-        }
+          narrator: { provider: "deepgram", voiceId: "aura-asteria-en" },
+        },
       };
     }
   }
@@ -38,16 +41,23 @@ export class VoicePersonaManager {
     return this.config.default;
   }
 
-  resolvePersona(name: string): { provider: string; voiceConfig: TtsVoiceConfig } {
-    const persona = this.config.personas[name.toLowerCase()] || this.config.personas[this.config.default];
-    
+  resolvePersona(name: string): {
+    provider: string;
+    voiceConfig: TtsVoiceConfig;
+  } {
+    const persona =
+      this.config.personas[name.toLowerCase()] ||
+      this.config.personas[this.config.default];
+
     if (!persona) {
-        // Fallback if even default is missing
-        return {
-            provider: "deepgram",
-            voiceConfig: { voice: "aura-asteria-en" }
-        };
+      // Fallback if even default is missing
+      return {
+        provider: "deepgram",
+        voiceConfig: { voice: "aura-asteria-en" },
+      };
     }
+
+    console.debug(`Resolved persona ${name} to ${JSON.stringify(persona)}`);
 
     return {
       provider: persona.provider,
@@ -57,8 +67,8 @@ export class VoicePersonaManager {
       },
     };
   }
-  
+
   getPersonas(): string[] {
-      return Object.keys(this.config.personas);
+    return Object.keys(this.config.personas);
   }
 }

@@ -2,24 +2,29 @@
   "default": "narrator",
   "personas": {
     "narrator": {
-      "provider": "deepgram",
-      "voiceId": "aura-asteria-en",
-      "options": {}
+      "provider": "inworld",
+      "voiceId": "Hades",
+      "options": { "modelId": "inworld-tts-1.5-max" }
     },
     "wizard": {
-      "provider": "deepgram",
-      "voiceId": "aura-orion-en",
-      "options": {}
+      "provider": "cartesia",
+      "voiceId": "87748186-23bb-4158-a1eb-332911b0b708",
+      "options": { "modelId": "sonic-3" }
     },
     "soldier": {
-      "provider": "deepgram",
-      "voiceId": "aura-angus-en",
-      "options": {}
+      "provider": "cartesia",
+      "voiceId": "42b39f37-515f-4eee-8546-73e841679c1d",
+      "options": { "modelId": "eleven_flash_v2_5" }
     },
     "barkeeper": {
-      "provider": "deepgram",
-      "voiceId": "aura-arcas-en",
-      "options": {}
+      "provider": "elevenlabs",
+      "voiceId": "IKne3meq5aSn9XLyUdCD",
+      "options": { "modelId": "eleven_flash_v2_5" }
+    },
+    "oracle": {
+      "provider": "inworld",
+      "voiceId": "Ashley",
+      "options": { "modelId": "inworld-tts-1.5-max" }
     }
   }
 }

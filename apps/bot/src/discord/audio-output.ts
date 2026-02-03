@@ -96,8 +96,8 @@ export class GuildSpeechQueue {
           // Buffer audio to prevent stuttering (initial word -> pause -> rest)
           const bufferedPcm = pcm.pipe(
             new BufferedAudioStream({
-              bufferDurationMs: 600, // Wait for 600ms of audio before starting
-              silenceDurationMs: 200, // Prepend 200ms of silence
+              bufferDurationMs: 800, // Wait for 800ms of audio before starting
+              silenceDurationMs: 0, // Prepend 200ms of silence
             }),
           );
 
