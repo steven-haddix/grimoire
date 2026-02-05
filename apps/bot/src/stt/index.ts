@@ -1,3 +1,4 @@
+import { AssemblyAISttProvider } from "./providers/assemblyai";
 import { DeepgramSttProvider } from "./providers/deepgram";
 import type { SttProvider } from "./types";
 
@@ -8,7 +9,7 @@ export type {
   SttStreamParams,
   SttTranscript,
 } from "./types";
-export type SttProviderName = "deepgram";
+export type SttProviderName = "deepgram" | "assemblyai";
 
 export function createSttProviderFromEnv(
   env: Record<string, string | undefined>,
@@ -19,6 +20,12 @@ export function createSttProviderFromEnv(
     const key = env.DEEPGRAM_API_KEY;
     if (!key) throw new Error("Missing DEEPGRAM_API_KEY");
     return new DeepgramSttProvider(key);
+  }
+
+  if (provider === "assemblyai") {
+    const key = env.ASSEMBLYAI_API_KEY;
+    if (!key) throw new Error("Missing ASSEMBLYAI_API_KEY");
+    return new AssemblyAISttProvider(key);
   }
 
   throw new Error(`Unsupported STT provider: ${provider}`);
