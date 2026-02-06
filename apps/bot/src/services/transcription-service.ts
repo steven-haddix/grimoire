@@ -5,7 +5,7 @@ import type { SttService } from "./stt-service";
 
 export class TranscriptionService {
   private sessionMap = new Map<string, number>();
-  private activeStreams = new Set<string>();
+  private speakerSessions = new Map<string, SpeakerSession>();
 
   constructor(
     private stt: SttService,
@@ -19,7 +19,7 @@ export class TranscriptionService {
 
   clearSession(guildId: string) {
     this.sessionMap.delete(guildId);
-    this.clearActiveStreams(guildId);
+    this.closeGuildSpeakerSessions(guildId);
   }
 
   hasSession(guildId: string) {
@@ -39,66 +39,82 @@ export class TranscriptionService {
     if (!sessionId) return;
 
     const streamKey = `${params.guildId}:${params.userId}`;
-    if (this.activeStreams.has(streamKey)) return;
+    const existingSession = this.speakerSessions.get(streamKey);
+    if (existingSession && !existingSession.matchesSessionId(sessionId)) {
+      existingSession.close();
+      this.speakerSessions.delete(streamKey);
+    }
 
-    this.activeStreams.add(streamKey);
-    this.processStream({
-      streamKey,
-      sessionId,
-      guildId: params.guildId,
-      userId: params.userId,
-      stream: params.stream,
-    });
+    const speakerSession =
+      this.speakerSessions.get(streamKey) ??
+      this.createSpeakerSession({
+        streamKey,
+        sessionId,
+        guildId: params.guildId,
+        userId: params.userId,
+      });
+
+    speakerSession.handleAudioStream(params.stream);
   }
 
-  private clearActiveStreams(guildId: string) {
-    for (const key of this.activeStreams) {
-      if (key.startsWith(`${guildId}:`)) {
-        this.activeStreams.delete(key);
-      }
+  private closeGuildSpeakerSessions(guildId: string) {
+    for (const [key, speakerSession] of this.speakerSessions) {
+      if (!key.startsWith(`${guildId}:`)) continue;
+      this.speakerSessions.delete(key);
+      speakerSession.close();
     }
   }
 
-  private processStream(params: {
+  private createSpeakerSession(params: {
     streamKey: string;
     sessionId: number;
     guildId: string;
     userId: string;
-    stream: Readable;
-  }) {
-    let cleanedUp = false;
-    let sttStream: SttStream | null = null;
+  }): SpeakerSession {
+    let speakerSession: SpeakerSession;
+    speakerSession = new SpeakerSession({
+      ...params,
+      stt: this.stt,
+      sink: this.sink,
+      resolveSpeaker: this.resolveSpeaker,
+      onClosed: () => {
+        if (this.speakerSessions.get(params.streamKey) === speakerSession) {
+          this.speakerSessions.delete(params.streamKey);
+        }
+      },
+    });
 
-    const cleanup = () => {
-      if (cleanedUp) return;
-      cleanedUp = true;
-      this.activeStreams.delete(params.streamKey);
-      try {
-        params.stream.destroy();
-      } catch {}
-      try {
-        sttStream?.close();
-      } catch {}
-    };
+    this.speakerSessions.set(params.streamKey, speakerSession);
+    return speakerSession;
+  }
+}
 
-    // biome-ignore lint/suspicious/noExplicitAny: data comes from Discord receiver
-    const onData = (chunk: any) => {
-      try {
-        sttStream?.send(chunk);
-      } catch (err) {
-        console.error("STT send failed", err);
-        cleanup();
-      }
-    };
+type SpeakerSessionState = "connecting" | "open" | "closed";
 
-    sttStream = this.stt.createStream({
+type SpeakerSessionParams = {
+  streamKey: string;
+  sessionId: number;
+  guildId: string;
+  userId: string;
+  stt: SttService;
+  sink: TranscriptSink;
+  resolveSpeaker: SpeakerResolver;
+  onClosed: () => void;
+};
+
+class SpeakerSession {
+  private state: SpeakerSessionState = "connecting";
+  private sttStream: SttStream | null = null;
+  private pendingAudio: PendingAudio | null = null;
+  private detachActiveAudio: (() => void) | null = null;
+  private closed = false;
+
+  constructor(private params: SpeakerSessionParams) {
+    this.sttStream = params.stt.createStream({
       onOpen: () => {
-        params.stream.on("data", onData);
-        params.stream.once("end", cleanup);
-        params.stream.once("error", (err) => {
-          console.error("Opus stream error", err);
-          cleanup();
-        });
+        if (this.closed) return;
+        this.state = "open";
+        this.flushPendingAudio();
       },
       onTranscript: (result) => {
         if (!result.isFinal) return;
@@ -106,10 +122,12 @@ export class TranscriptionService {
         if (!text) return;
 
         const speaker =
-          this.resolveSpeaker(params.userId, params.guildId) ?? "Unknown";
-        this.sink
+          this.params.resolveSpeaker(this.params.userId, this.params.guildId) ??
+          "Unknown";
+
+        this.params.sink
           .ingest({
-            sessionId: params.sessionId,
+            sessionId: this.params.sessionId,
             speaker,
             text,
             timestamp: new Date().toISOString(),
@@ -118,9 +136,172 @@ export class TranscriptionService {
       },
       onError: (error) => {
         console.error("STT error", error);
-        cleanup();
+        this.shutdown(true);
       },
-      onClose: cleanup,
+      onClose: () => {
+        this.shutdown(false);
+      },
     });
   }
+
+  matchesSessionId(sessionId: number) {
+    return this.params.sessionId === sessionId;
+  }
+
+  handleAudioStream(stream: Readable) {
+    if (this.closed) {
+      destroyStream(stream);
+      return;
+    }
+
+    if (this.pendingAudio || this.detachActiveAudio) {
+      destroyStream(stream);
+      return;
+    }
+
+    if (this.state === "open") {
+      this.attachActiveAudio(stream);
+      return;
+    }
+
+    this.pendingAudio = this.createPendingAudio(stream);
+  }
+
+  close() {
+    this.shutdown(true);
+  }
+
+  private flushPendingAudio() {
+    const pending = this.pendingAudio;
+    if (!pending) return;
+
+    this.pendingAudio = null;
+    pending.detach();
+
+    if (!isReadableStreamOpen(pending.stream)) return;
+    this.attachActiveAudio(pending.stream);
+  }
+
+  private createPendingAudio(stream: Readable): PendingAudio {
+    let detached = false;
+
+    const cleanup = () => {
+      detach();
+      if (this.pendingAudio?.stream === stream) {
+        this.pendingAudio = null;
+      }
+    };
+
+    const onEnd = cleanup;
+    const onClose = cleanup;
+    const onError = (err: unknown) => {
+      console.error("Opus stream error", err);
+      cleanup();
+    };
+
+    const detach = () => {
+      if (detached) return;
+      detached = true;
+      stream.off("end", onEnd);
+      stream.off("close", onClose);
+      stream.off("error", onError);
+    };
+
+    stream.once("end", onEnd);
+    stream.once("close", onClose);
+    stream.once("error", onError);
+
+    return { stream, detach };
+  }
+
+  private attachActiveAudio(stream: Readable) {
+    const sttStream = this.sttStream;
+    if (!sttStream) {
+      destroyStream(stream);
+      return;
+    }
+
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+
+      stream.off("data", onData);
+      stream.off("end", onEnd);
+      stream.off("close", onClose);
+      stream.off("error", onError);
+
+      if (this.detachActiveAudio === cleanup) {
+        this.detachActiveAudio = null;
+      }
+
+      destroyStream(stream);
+    };
+
+    // biome-ignore lint/suspicious/noExplicitAny: data comes from Discord receiver
+    const onData = (chunk: any) => {
+      try {
+        sttStream.send(chunk);
+      } catch (err) {
+        console.error("STT send failed", err);
+        cleanup();
+        this.shutdown(true);
+      }
+    };
+
+    const onEnd = cleanup;
+    const onClose = cleanup;
+    const onError = (err: unknown) => {
+      console.error("Opus stream error", err);
+      cleanup();
+    };
+
+    this.detachActiveAudio = cleanup;
+    stream.on("data", onData);
+    stream.once("end", onEnd);
+    stream.once("close", onClose);
+    stream.once("error", onError);
+  }
+
+  private shutdown(shouldCloseStt: boolean) {
+    if (this.closed) return;
+    this.closed = true;
+    this.state = "closed";
+
+    const pending = this.pendingAudio;
+    this.pendingAudio = null;
+    if (pending) {
+      pending.detach();
+      destroyStream(pending.stream);
+    }
+
+    const detachActiveAudio = this.detachActiveAudio;
+    this.detachActiveAudio = null;
+    detachActiveAudio?.();
+
+    const sttStream = this.sttStream;
+    this.sttStream = null;
+    if (shouldCloseStt) {
+      try {
+        sttStream?.close();
+      } catch {}
+    }
+
+    this.params.onClosed();
+  }
+}
+
+type PendingAudio = {
+  stream: Readable;
+  detach: () => void;
+};
+
+function isReadableStreamOpen(stream: Readable) {
+  return !stream.destroyed && !stream.readableEnded;
+}
+
+function destroyStream(stream: Readable) {
+  try {
+    stream.destroy();
+  } catch {}
 }

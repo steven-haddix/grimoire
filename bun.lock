@@ -18,9 +18,11 @@
         "@discordjs/opus": "^0.10.0",
         "@discordjs/voice": "^0.19.0",
         "@elevenlabs/elevenlabs-js": "^2.31.0",
+        "assemblyai": "^4.23.0",
         "discord.js": "^14.25.1",
         "dotenv": "^17.2.3",
         "opusscript": "^0.1.1",
+        "prism-media": "^1.3.5",
       },
       "devDependencies": {
         "bun-types": "^1.3.6",
@@ -571,6 +573,8 @@
     "are-we-there-yet": ["are-we-there-yet@2.0.0", "", { "dependencies": { "delegates": "^1.0.0", "readable-stream": "^3.6.0" } }, "sha512-Ci/qENmwHnsYo9xKIcUJN5LeDKdJ6R1Z1j9V/J5wyq8nh/mYPEpIKJbBZXtZjG04HiK7zV/p6Vs9952MrMeUIw=="],
 
     "aria-hidden": ["aria-hidden@1.2.6", "", { "dependencies": { "tslib": "^2.0.0" } }, "sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA=="],
+
+    "assemblyai": ["assemblyai@4.23.0", "", { "dependencies": { "ws": "^8.18.0" } }, "sha512-UtmCR4QD5qDy6uYLC+LJJmn8vcUrKOIXbS2VrciiPOSYrBoL+o18SbAZ/viwN4WoNAowKu9dPgvE+F7McebMgA=="],
 
     "bail": ["bail@2.0.2", "", {}, "sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw=="],
 
