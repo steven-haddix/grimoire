@@ -1,13 +1,23 @@
 # dnd-scribe
 
-A Bun monorepo for a Discord-based D&D scribe. The bot streams voice audio to Deepgram for transcription, while the web app stores transcripts in Neon and summarizes sessions with Vercel AI SDK.
+A Bun monorepo for a Discord-based D&D scribe.
+
+## Architecture
+
+- `apps/bot`: Discord runtime (voice capture, STT, agent, summarization).
+- `apps/web`: Next.js dashboard/auth/config UI.
+- `packages/data`: shared Drizzle schema + repository layer for runtime tables.
+
+The bot writes runtime data directly to Postgres (`sessions`, `transcripts`, `summaries`, `memories`, `chat_messages`, `bot_guilds`) so it can keep operating even if the web app is down.
 
 ## Structure
 
-```
+```text
 /apps
   /bot  - Discord bot (Fly.io)
-  /web  - Next.js admin + API (Vercel)
+  /web  - Next.js dashboard + auth
+/packages
+  /data - shared DB schema/client/repos
 ```
 
 ## Getting Started
@@ -16,7 +26,15 @@ A Bun monorepo for a Discord-based D&D scribe. The bot streams voice audio to De
 bun install
 ```
 
-### Web (Next.js)
+### Database schema
+
+From repo root:
+
+```bash
+bun db:push
+```
+
+### Web (dashboard)
 
 ```bash
 bun dev:web
@@ -24,24 +42,18 @@ bun dev:web
 
 Set env vars in `apps/web/.env` (see `apps/web/.env.example`):
 - `DATABASE_URL`
-- `OPENAI_API_KEY`
-- `BOT_SECRET`
-- `LANGFUSE_SECRET_KEY` (optional; Langfuse tracing)
-- `LANGFUSE_PUBLIC_KEY` (optional; Langfuse tracing)
-- `LANGFUSE_BASEURL` (optional; Langfuse cloud region base URL)
 - `BETTER_AUTH_SECRET`
 - `BETTER_AUTH_URL`
 - `DISCORD_CLIENT_ID`
 - `DISCORD_CLIENT_SECRET`
-- `NEXT_PUBLIC_DISCORD_APP_ID` (Discord Application ID)
+- `NEXT_PUBLIC_DISCORD_APP_ID`
+- `UPSTASH_REDIS_REST_URL` (optional)
+- `UPSTASH_REDIS_REST_TOKEN` (optional)
+- `LANGFUSE_SECRET_KEY` (optional)
+- `LANGFUSE_PUBLIC_KEY` (optional)
+- `LANGFUSE_BASEURL` (optional)
 
-Run migrations (from `apps/web`):
-
-```bash
-bunx drizzle-kit push
-```
-
-### Bot (Discord)
+### Bot (runtime)
 
 ```bash
 bun dev:bot
@@ -49,55 +61,58 @@ bun dev:bot
 
 Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 - `DISCORD_TOKEN`
-- `DISCORD_APP_ID` (Discord Application ID; required for slash command registration)
+- `DISCORD_APP_ID` (Discord Application ID)
+- `DATABASE_URL`
+- `GOOGLE_GENERATIVE_AI_API_KEY`
 - `DEEPGRAM_API_KEY`
-- `TTS_PROVIDER` (optional; `deepgram`, `elevenlabs`, or `cartesia`)
-- `TTS_VOICE` (provider voice id/name)
+- `STT_PROVIDER` (optional; `deepgram` or `assemblyai`)
+- `TTS_PROVIDER` (optional; `deepgram`, `elevenlabs`, `cartesia`, `inworld`)
+- `TTS_VOICE`
 - `TTS_VOICE_OPTIONS` (optional JSON object string)
 - `ELEVENLABS_API_KEY` (if using ElevenLabs)
 - `CARTESIA_API_KEY` (if using Cartesia)
 - `CARTESIA_BASE_URL` (optional)
-- `NEXT_API_URL` (ex: `http://localhost:3000/api`)
-- `BOT_SECRET` (same as web)
+- `INWORLD_API_KEY` (if using Inworld)
 - `BOT_HTTP_PORT` (optional; defaults to `PORT` or `3001`)
 
 ## Deployment
 
 ### Neon
-- Create a Neon project and copy `DATABASE_URL` into the web app env.
+- Create a Neon project and set `DATABASE_URL` for both bot and web.
 
-### Vercel
-- Deploy `apps/web`.
-- Add `DATABASE_URL`, `OPENAI_API_KEY`, `BOT_SECRET`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
-  `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_BASEURL`, `DISCORD_CLIENT_ID`,
-  `DISCORD_CLIENT_SECRET`, and `NEXT_PUBLIC_DISCORD_APP_ID`.
+### Vercel (`apps/web`)
+- Deploy dashboard/auth app.
+- Add web env vars above.
 
-### Fly.io
-- From `apps/bot`, run `fly launch` (do not deploy yet).
+### Fly.io (`apps/bot`)
+- From repo root, run `fly launch --config apps/bot/fly.toml` (do not deploy yet).
 - Set secrets:
 
 ```bash
-fly secrets set \
+fly secrets set --config apps/bot/fly.toml \
   DISCORD_TOKEN=... \
   DISCORD_APP_ID=... \
+  DATABASE_URL=... \
+  GOOGLE_GENERATIVE_AI_API_KEY=... \
   DEEPGRAM_API_KEY=... \
   TTS_PROVIDER=deepgram \
-  TTS_VOICE=aura-asteria-en \
-  ELEVENLABS_API_KEY=... \
-  CARTESIA_API_KEY=... \
-  CARTESIA_BASE_URL=https://api.cartesia.ai \
-  NEXT_API_URL=https://your-vercel-app.com/api \
-  BOT_SECRET=...
+  TTS_VOICE=aura-asteria-en
 ```
 
 - Deploy:
 
 ```bash
-fly deploy
+fly deploy --config apps/bot/fly.toml
 ```
+
+## Quality checks
+
+- `bun check`
+- `bun lint`
+- `bun format`
 
 ## Notes
 
-- If `nova-3` is unavailable in your Deepgram plan or region, update the bot config to `model: "nova-2"`.
-- Discord message content intent should be enabled if you want the bot to read mention prompts for the agent.
-- TTS playback requires `ffmpeg` installed on the host/container.
+- Discord message content intent should be enabled if you want the bot to read @mention prompts.
+- Deepgram `nova-3` availability varies by account/region.
+- Bot HTTP server exposes `GET /healthz` and `GET /readyz`.

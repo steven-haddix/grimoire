@@ -64,24 +64,32 @@ export class InworldTtsProvider implements TtsProvider {
       try {
         for await (const line of rl) {
           if (!line.trim()) continue;
-          
+
           try {
             const chunk = JSON.parse(line);
-            
+
             if (chunk.error) {
-              throw new Error(`Inworld Stream Error: ${JSON.stringify(chunk.error)}`);
+              throw new Error(
+                `Inworld Stream Error: ${JSON.stringify(chunk.error)}`,
+              );
             }
 
             if (chunk.result?.audioContent) {
-              const audioBuffer = Buffer.from(chunk.result.audioContent, "base64");
+              const audioBuffer = Buffer.from(
+                chunk.result.audioContent,
+                "base64",
+              );
               audioStream.push(audioBuffer);
             }
           } catch (e) {
             // If the error was thrown by us (chunk.error), rethrow it
-            if (e instanceof Error && e.message.startsWith("Inworld Stream Error")) {
+            if (
+              e instanceof Error &&
+              e.message.startsWith("Inworld Stream Error")
+            ) {
               throw e;
             }
-            // Otherwise log parse errors but continue if possible? 
+            // Otherwise log parse errors but continue if possible?
             // Better to fail if we can't parse reliable data
             console.warn("Error processing Inworld TTS chunk:", e);
           }

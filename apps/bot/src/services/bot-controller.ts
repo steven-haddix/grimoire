@@ -1,11 +1,22 @@
-import type { BotApi } from "../api/bot-api";
+import type { RuntimeDb } from "@grimoire/data/client";
+import {
+  createCampaign,
+  listCampaigns,
+  setActiveCampaignByName,
+} from "@grimoire/data/repos/campaigns";
+import type { AgentAction, AgentRequest } from "../agent/agent";
 import type { BotConfig } from "../config";
 import type { TtsVoiceConfig } from "../tts/types";
 import type { CommandContext, CommandIntent, VoiceGateway } from "../types";
+import type { SessionLifecycle } from "./session-lifecycle.types";
 import type { TranscriptionService } from "./transcription-service";
 
 export type BotController = {
   handleIntent: (intent: CommandIntent, ctx: CommandContext) => Promise<void>;
+};
+
+export type AgentRuntime = {
+  run: (input: AgentRequest) => Promise<{ actions: AgentAction[] }>;
 };
 
 const HELP_MESSAGE = "Ask me about the session or say `/grim start`.";
@@ -20,13 +31,23 @@ function buildVoiceConfig(
   };
 }
 
+function formatRecap(sessionId: number, recap: string | null) {
+  if (!recap) {
+    return `📜 Session #${sessionId} archived. I had too little transcript to summarize.`;
+  }
+
+  return `📜 Session #${sessionId} recap:\n${recap}`;
+}
+
 export function createBotController(params: {
   config: BotConfig;
-  api: BotApi;
+  db: RuntimeDb;
   voice: VoiceGateway;
   transcription: TranscriptionService;
+  sessionLifecycle: SessionLifecycle;
+  agent: AgentRuntime;
 }): BotController {
-  const { config, api, voice, transcription } = params;
+  const { config, db, voice, transcription, sessionLifecycle, agent } = params;
 
   const handleStart = async (ctx: CommandContext) => {
     if (!ctx.voiceChannelId) {
@@ -51,7 +72,7 @@ export function createBotController(params: {
     }
 
     try {
-      const sessionId = await api.startSession({
+      const sessionId = await sessionLifecycle.start({
         guildId: ctx.guildId,
         channelId: ctx.voiceChannelId,
       });
@@ -64,7 +85,9 @@ export function createBotController(params: {
     } catch (error) {
       console.error(error);
       voice.stopListening(ctx.guildId);
-      await ctx.reply("❌ Could not start session. Check the API.");
+      await ctx.reply(
+        "❌ Could not start session. Check the database connection.",
+      );
     }
   };
 
@@ -72,13 +95,22 @@ export function createBotController(params: {
     const sessionId = transcription.getSessionId(ctx.guildId);
     voice.stopListening(ctx.guildId);
 
-    if (sessionId) {
-      await ctx.reply("🛑 Session ended. Summarizing...");
+    if (!sessionId) {
+      await ctx.reply("No active session to stop.");
+      return;
+    }
 
-      api
-        .summarizeSession(sessionId)
-        .catch((err) => console.error("Summarize failed", err));
+    await ctx.reply("🛑 Session ended. Summarizing...");
 
+    try {
+      const result = await sessionLifecycle.stop(sessionId);
+      await ctx.reply(formatRecap(sessionId, result.recap));
+    } catch (error) {
+      console.error("Session stop failed", error);
+      await ctx.reply(
+        "❌ Session stop failed while persisting recap. Check database connectivity.",
+      );
+    } finally {
       transcription.clearSession(ctx.guildId);
     }
   };
@@ -89,8 +121,6 @@ export function createBotController(params: {
       return;
     }
 
-    // Reuse handleAgent logic but with a specific prompt
-    // Note: We construct a fake 'agent' intent to reuse the logic
     await handleAgent(ctx, {
       type: "agent",
       message:
@@ -131,7 +161,7 @@ export function createBotController(params: {
     if (intent.type !== "agent") return;
 
     try {
-      const actions = await api.runAgent({
+      const result = await agent.run({
         guildId: ctx.guildId,
         channelId: ctx.channelId,
         userId: ctx.userId,
@@ -140,7 +170,7 @@ export function createBotController(params: {
         message: intent.message,
       });
 
-      for (const action of actions) {
+      for (const action of result.actions) {
         if (action.type === "reply") {
           await ctx.reply(action.content);
           continue;
@@ -163,7 +193,7 @@ export function createBotController(params: {
       }
     } catch (error) {
       console.error("Agent request failed", error);
-      await ctx.reply("❌ Agent request failed. Check the API.");
+      await ctx.reply("❌ Agent request failed. Check logs.");
     }
   };
 
@@ -177,7 +207,7 @@ export function createBotController(params: {
     description?: string,
   ) => {
     try {
-      const campaign = await api.createCampaign({
+      const campaign = await createCampaign(db, {
         guildId: ctx.guildId,
         name,
         description,
@@ -193,7 +223,8 @@ export function createBotController(params: {
 
   const handleCampaignList = async (ctx: CommandContext) => {
     try {
-      const { campaigns, activeCampaignId } = await api.listCampaigns(
+      const { campaigns, activeCampaignId } = await listCampaigns(
+        db,
         ctx.guildId,
       );
       if (campaigns.length === 0) {
@@ -202,9 +233,9 @@ export function createBotController(params: {
       }
 
       const list = campaigns
-        .map((c) => {
-          const active = c.id === activeCampaignId ? " (Active) 🌟" : "";
-          return `- **${c.name}**${active}: ${c.description || "No description"}`;
+        .map((campaign) => {
+          const active = campaign.id === activeCampaignId ? " (Active) 🌟" : "";
+          return `- **${campaign.name}**${active}: ${campaign.description || "No description"}`;
         })
         .join("\n");
 
@@ -217,10 +248,16 @@ export function createBotController(params: {
 
   const handleCampaignSelect = async (ctx: CommandContext, name: string) => {
     try {
-      const campaign = await api.setActiveCampaign({
+      const campaign = await setActiveCampaignByName(db, {
         guildId: ctx.guildId,
         name,
       });
+
+      if (!campaign) {
+        await ctx.reply("❌ Failed to select campaign. Ensure it exists.");
+        return;
+      }
+
       await ctx.reply(`✅ Active campaign set to **${campaign.name}**.`);
     } catch (error) {
       console.error("Campaign select failed", error);

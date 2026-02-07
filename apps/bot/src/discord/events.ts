@@ -1,13 +1,24 @@
 import { type Client, Events } from "discord.js";
-import type { BotApi } from "../api/bot-api";
 import type { CommandRouter } from "./commands";
+
+export type GuildPresenceService = {
+  sync: (
+    guilds: Array<{ guildId: string; name: string; icon: string | null }>,
+  ) => Promise<void>;
+  upsert: (guild: {
+    guildId: string;
+    name: string;
+    icon: string | null;
+  }) => Promise<void>;
+  markRemoved: (guildId: string) => Promise<void>;
+};
 
 export function registerDiscordEvents(params: {
   client: Client;
-  api: BotApi;
+  guildPresence: GuildPresenceService;
   commands: CommandRouter;
 }) {
-  const { client, api, commands } = params;
+  const { client, guildPresence, commands } = params;
 
   client.once(Events.ClientReady, async () => {
     console.log("🐲 DND Scribe bot online");
@@ -17,7 +28,7 @@ export function registerDiscordEvents(params: {
         name: guild.name,
         icon: guild.icon ?? null,
       }));
-      await api.syncGuildPresence(guilds);
+      await guildPresence.sync(guilds);
     } catch (error) {
       console.error("Guild presence sync failed", error);
     }
@@ -25,7 +36,7 @@ export function registerDiscordEvents(params: {
 
   client.on(Events.GuildCreate, async (guild) => {
     try {
-      await api.upsertGuildPresence({
+      await guildPresence.upsert({
         guildId: guild.id,
         name: guild.name,
         icon: guild.icon ?? null,
@@ -37,7 +48,7 @@ export function registerDiscordEvents(params: {
 
   client.on(Events.GuildDelete, async (guild) => {
     try {
-      await api.markGuildRemoved(guild.id);
+      await guildPresence.markRemoved(guild.id);
     } catch (error) {
       console.error("Guild presence removal failed", error);
     }
@@ -45,7 +56,7 @@ export function registerDiscordEvents(params: {
 
   client.on(Events.GuildUpdate, async (_oldGuild, newGuild) => {
     try {
-      await api.upsertGuildPresence({
+      await guildPresence.upsert({
         guildId: newGuild.id,
         name: newGuild.name,
         icon: newGuild.icon ?? null,

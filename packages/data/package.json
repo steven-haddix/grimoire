@@ -1,0 +1,23 @@
+{
+  "name": "@grimoire/data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./schema-runtime": "./src/schema-runtime.ts",
+    "./types": "./src/types.ts",
+    "./repos/sessions": "./src/repos/sessions-repo.ts",
+    "./repos/transcripts": "./src/repos/transcripts-repo.ts",
+    "./repos/summaries": "./src/repos/summaries-repo.ts",
+    "./repos/campaigns": "./src/repos/campaigns-repo.ts",
+    "./repos/bot-guilds": "./src/repos/bot-guilds-repo.ts",
+    "./repos/memories": "./src/repos/memories-repo.ts",
+    "./repos/chat-messages": "./src/repos/chat-messages-repo.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "drizzle-orm": "^0.45.1"
+  }
+}

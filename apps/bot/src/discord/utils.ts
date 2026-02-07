@@ -49,7 +49,7 @@ export function splitMessage(text: string, maxLength = 2000): string[] {
 
       chunks.push(finalChunkContent + closing);
 
-      const opening = "```" + lang + "\n";
+      const opening = `\`\`\`${lang}\n`;
 
       // Determine how to continue the text
       if (text[splitAt] === "\n") {

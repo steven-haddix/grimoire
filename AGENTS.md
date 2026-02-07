@@ -1,127 +1,143 @@
 # dnd-scribe — Agent Guide
 
-This repo is a Bun monorepo for a Discord-based D&D “scribe”:
-- A Discord bot joins a voice channel, streams Opus audio to Deepgram Live, and receives transcribed text.
-- A Next.js web app exposes API routes that store transcripts in Neon (Postgres via Drizzle) and generate a session recap via Vercel AI SDK.
+This repo is a Bun monorepo for a Discord-based D&D scribe.
 
-## How the system works (end-to-end)
+## Architecture (current)
 
-1. User types `!scribe start` in a Discord server while connected to a voice channel.
-2. Bot joins voice, calls the web API to create a DB session record.
-3. For each speaking user, the bot opens a Deepgram Live connection and forwards Opus audio frames.
-4. When Deepgram emits a *final* transcript chunk, the bot POSTs it to the web API for persistence.
-5. User types `!scribe stop`; bot disconnects and triggers the web API to summarize the session.
+- `apps/bot` is the runtime system of record for session behavior:
+  - joins voice channels
+  - streams audio to STT providers
+  - persists transcripts/summaries/memory directly to Postgres
+  - runs the Discord mention agent and summarization calls
+- `apps/web` is dashboard/auth/config:
+  - Better Auth + Discord OAuth
+  - account/campaign/session reporting UI
+  - user-auth API routes under `apps/web/src/app/api/discord/*`
+- `packages/data` is shared data access:
+  - runtime Drizzle schema in `packages/data/src/schema-runtime.ts`
+  - DB client in `packages/data/src/client.ts`
+  - shared repository functions in `packages/data/src/repos/*`
 
-The “source of truth” is the database in `apps/web`:
-- `sessions`: lifecycle/status for each recording session
-- `transcripts`: ordered lines (speaker + content + timestamp)
-- `summaries`: final recap text for a session
+## End-to-end flow
+
+1. User runs `/grim start` while in a voice channel.
+2. Bot starts listening and inserts an active `sessions` row directly via `packages/data` repos.
+3. For each speaker, bot streams audio to STT and inserts final transcript chunks into `transcripts`.
+4. User runs `/grim stop`.
+5. Bot summarizes locally (AI SDK), writes `summaries`, marks the session complete, and posts a short recap to Discord.
+6. Web dashboard reads data from DB for reporting.
+
+## Source of truth
+
+Runtime data lives in Postgres and is accessed through `packages/data`:
+- `campaigns`
+- `bot_guilds`
+- `sessions`
+- `transcripts`
+- `summaries`
+- `memories`
+- `chat_messages`
 
 ## Repo layout
 
-- `package.json`: Bun workspaces + top-level scripts (preferred entrypoints)
-- `apps/bot/`: Discord bot (Bun runtime; deploy target: Fly.io)
-  - `apps/bot/src/index.ts`: bot commands, voice capture, Deepgram streaming, API calls
-- `apps/web/`: Next.js app + API (deploy target: Vercel)
-  - `apps/web/src/app/api/session/start/route.ts`: creates a session row
-  - `apps/web/src/app/api/ingest/route.ts`: inserts transcript lines
-  - `apps/web/src/app/api/summarize/route.ts`: reads transcripts, generates recap, writes summary + completes session
-  - `apps/web/src/db/schema.ts`: Drizzle schema (tables)
-  - `apps/web/drizzle/`: generated migrations
-- `biome.json`: formatting/linting rules (Biome is the canonical formatter)
+- `package.json`: Bun workspaces + top-level scripts
+- `apps/bot/`: Discord bot runtime (Fly.io)
+  - `apps/bot/src/index.ts`: boot entrypoint
+  - `apps/bot/src/app/bootstrap.ts`: dependency wiring
+  - `apps/bot/src/agent/agent.ts`: mention agent runtime
+  - `apps/bot/src/services/session-summarizer.ts`: summarization
+- `apps/web/`: Next.js dashboard/auth app (Vercel)
+  - `apps/web/src/app/api/discord/*`: frontend/user-auth routes
+  - `apps/web/src/app/actions/campaigns.ts`: dashboard config actions
+- `packages/data/`: shared schema/client/repos for runtime DB access
 
-## Local development (do this first)
+## Local development
 
 Install dependencies:
 - `bun install`
 
-Start the web app (in one terminal):
-- `bun dev:web`
-
-Set up the web env (copy and fill):
-- `apps/web/.env.example` → `apps/web/.env`
-
-Initialize/update the database schema (from repo root):
+Run database schema push from repo root:
 - `bun db:push`
 
-Start the bot (in another terminal):
+Run web app:
+- `bun dev:web`
+
+Run bot:
 - `bun dev:bot`
 
-Set up the bot env (copy and fill):
-- `apps/bot/.env.example` → `apps/bot/.env`
+## Environment variables
 
-## Environment variables and auth
+### Bot (`apps/bot/.env`)
+Required:
+- `DISCORD_TOKEN`
+- `DATABASE_URL`
+- `GOOGLE_GENERATIVE_AI_API_KEY`
 
-`BOT_SECRET` is a shared secret used to authenticate bot → web API calls:
-- Bot sends header `x-bot-secret: $BOT_SECRET`
-- Web API rejects requests if header doesn’t match `process.env.BOT_SECRET`
+Common optional/conditional:
+- `DISCORD_APP_ID`
+- `DEEPGRAM_API_KEY`
+- `ASSEMBLYAI_API_KEY`
+- `STT_PROVIDER`
+- `TTS_PROVIDER`
+- `TTS_VOICE`
+- `TTS_VOICE_OPTIONS`
+- `ELEVENLABS_API_KEY`
+- `CARTESIA_API_KEY`
+- `CARTESIA_BASE_URL`
+- `INWORLD_API_KEY`
+- `BOT_HTTP_PORT`
 
-Do not weaken or remove this check. If you change the auth mechanism, update:
-- bot request headers in `apps/bot/src/index.ts`
-- web auth checks in every API route under `apps/web/src/app/api/*/route.ts`
-- both `.env.example` files and `README.md`
+### Web (`apps/web/.env`)
+- `DATABASE_URL`
+- `BETTER_AUTH_SECRET`
+- `BETTER_AUTH_URL`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_CLIENT_SECRET`
+- `NEXT_PUBLIC_DISCORD_APP_ID`
+- `UPSTASH_REDIS_REST_URL` (optional)
+- `UPSTASH_REDIS_REST_TOKEN` (optional)
+- `LANGFUSE_SECRET_KEY` (optional)
+- `LANGFUSE_PUBLIC_KEY` (optional)
+- `LANGFUSE_BASEURL` (optional)
 
-## API contracts (bot ↔ web)
+## Data and migration workflow
 
-All routes expect `x-bot-secret`.
+Schema entrypoint used by web Drizzle config remains:
+- `apps/web/src/db/schema.ts`
 
-- `POST /api/session/start`
-  - body: `{ guildId: string, channelId: string }`
-  - response: `{ sessionId: number }`
-- `POST /api/ingest`
-  - body: `{ sessionId: number, speaker: string, text: string, timestamp?: string|number }`
-  - response: `{ ok: true }`
-- `POST /api/summarize`
-  - body: `{ sessionId: number|string }`
-  - response: `{ success: true, summary: string }`
-
-If you change payload shapes, update both sides in the same PR.
-
-## Database + Drizzle workflow
-
-Schema lives in `apps/web/src/db/schema.ts`.
+That file re-exports runtime schema from `packages/data` plus Better Auth schema.
 
 Preferred commands from repo root:
-- `bun db:push` (push schema to DB)
-- `bun db:generate` (generate migrations)
-- `bun db:migrate` (run migrations)
-- `bun db:studio` (open Drizzle Studio)
+- `bun db:push`
+- `bun db:generate`
+- `bun db:migrate`
+- `bun db:studio`
 
-Avoid manual edits inside `apps/web/drizzle/` unless you are intentionally fixing a broken migration.
+Avoid manual edits inside `apps/web/drizzle/` unless intentionally fixing a migration.
 
-## Summarization (Vercel AI SDK)
+## Engineering conventions
 
-Summarization is implemented in `apps/web/src/app/api/summarize/route.ts` using Vercel AI SDK’s `generateText`.
-If you switch models/providers (Google/OpenAI/etc), update:
-- provider code and env var usage
-- `apps/web/.env.example`
-- any deployment docs in `README.md`
-
-## Engineering conventions (stay consistent)
-
-- Use Bun for scripts and installs; do not introduce `npm`, `pnpm`, or new build tools.
-- Keep Bun versions compatible with `packageManager` in `package.json` (currently Bun 1.3.x).
+- Use Bun for installs/scripts.
 - Use Biome for formatting/linting (`bun check`, `bun lint`, `bun format`).
-- Keep changes small and scoped; do not restructure the monorepo without an explicit request.
-- Prefer the existing runtime patterns:
-  - Next.js route handlers use `NextResponse` and explicit input parsing/type guards (no new validation library unless asked).
-  - Bot uses `discord.js` + `@discordjs/voice` receiver; be careful with cleanup/concurrency (one stream per user per guild).
+- Keep changes scoped and avoid unnecessary monorepo restructuring.
+- Keep runtime DB access in `packages/data` repos; do not duplicate query logic across bot/web.
+- Do not log secrets.
 
-## Deployment pointers (so you don’t design the wrong thing)
+## Deployment pointers
 
-- `apps/web` is intended for Vercel (Next.js app router + server routes).
-- `apps/bot` is intended for Fly.io (see `apps/bot/fly.toml` and `apps/bot/Dockerfile`).
-- Database is Neon Postgres via `DATABASE_URL`; avoid introducing another DB/storage layer unless explicitly requested.
+- `apps/web` deploy target: Vercel.
+- `apps/bot` deploy target: Fly.io.
+- Neon Postgres is shared by bot and web via `DATABASE_URL`.
 
-## Quick quality checks before you finish
+## Quick quality checks before finish
 
-- `bun check` (Biome check)
-- `bun lint` (Biome lint)
-- `bun format` (write formatting)
-- For behavior changes: run `bun dev:web` + `bun dev:bot` and validate `!scribe start/stop` end-to-end (requires real Discord + Deepgram creds).
+- `bun check`
+- `bun lint`
+- `bun format`
+- For behavior changes: validate `/grim start` → speech → `/grim stop` in a real Discord server.
 
 ## Common pitfalls
 
-- `NEXT_API_URL` in `apps/bot/.env` must include `/api` (example: `http://localhost:3000/api`).
-- Deepgram model availability varies by account/region; `apps/bot/src/index.ts` uses `model: "nova-3"`.
-- Do not log secrets (tokens/keys) to the console or return them from API routes.
+- If Deepgram `nova-3` is unavailable, switch model in bot STT config.
+- Ensure Discord Message Content intent is enabled for mention-driven agent interactions.
+- TTS playback requires `ffmpeg` on the host/container.
