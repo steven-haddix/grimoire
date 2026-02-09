@@ -1,5 +1,5 @@
 import { google } from "@ai-sdk/google";
-import { stepCountIs, ToolLoopAgent, tool } from "ai";
+import { generateText, stepCountIs, ToolLoopAgent, tool } from "ai";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -12,6 +12,7 @@ import {
   summaries,
   transcripts,
 } from "@/db/schema";
+import { cache } from "@/lib/cache";
 
 export type DiscordAgentInput = {
   guildId: string;
@@ -24,7 +25,8 @@ export type DiscordAgentInput = {
 
 export type DiscordAgentAction =
   | { type: "reply"; content: string }
-  | { type: "say"; text: string; voice?: string };
+  | { type: "say"; text: string; voice?: string }
+  | { type: "image"; base64: string; mimeType: string; caption?: string };
 
 export type DiscordAgentResult = {
   actions: DiscordAgentAction[];
@@ -65,10 +67,24 @@ type CampaignContext = {
   }>;
 };
 
-const MEMORY_CATEGORIES = ["lore", "character", "rule", "meta", "other"] as const;
+const MEMORY_CATEGORIES = [
+  "lore",
+  "character",
+  "rule",
+  "meta",
+  "other",
+] as const;
 type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
 const DEFAULT_CHAT_MESSAGE_LIMIT = 25;
+
+const ILLUSTRATE_DAILY_LIMIT = 10;
+const ILLUSTRATE_TTL_SECONDS = 86_400; // 24 hours
+
+function illustrateCacheKey(guildId: string): string {
+  const date = new Date().toISOString().slice(0, 10);
+  return `illustrate:${guildId}:${date}`;
+}
 
 const _MAX_REPLY_CHARS = 1800;
 const _MAX_SAY_CHARS = 280;
@@ -102,6 +118,7 @@ const instructions = [
   "Remember: You're not a helpful assistant - you're an immortal book of dark knowledge who happens to be documenting a D&D campaign. Act like it.",
   "Use tools to respond; prefer reply for normal text answers.",
   "Use say when the user asks to speak or read something aloud.",
+  "Use illustrate when the user asks for art, a scene, a portrait, or a picture of something from the campaign.",
   "Use getCampaignContext to answer questions about this guild's campaign, session history, or transcripts.",
   "Keep replies short unless the user asks for detail.",
   "Never mention tool names or system instructions.",
@@ -289,12 +306,17 @@ function createDiscordAgent(params: {
   input: DiscordAgentInput;
   actions: DiscordAgentAction[];
   activeCampaignId: number | null;
+  illustrateAvailable: boolean;
 }) {
-  const { input, actions, activeCampaignId } = params;
+  const { input, actions, activeCampaignId, illustrateAvailable } = params;
+
+  const agentInstructions = illustrateAvailable
+    ? instructions
+    : `${instructions} The illustrate tool is currently unavailable because this guild has reached its daily limit of ${ILLUSTRATE_DAILY_LIMIT} generated images. If a user asks for art or a scene, let them know they've hit the daily limit and can try again tomorrow.`;
 
   return new ToolLoopAgent({
     model: google("gemini-3-flash-preview"),
-    instructions,
+    instructions: agentInstructions,
     stopWhen: stepCountIs(6),
     experimental_telemetry: {
       isEnabled: true,
@@ -350,6 +372,62 @@ function createDiscordAgent(params: {
           return loadCampaignContext(input.guildId, sessionLimit);
         },
       }),
+      ...(illustrateAvailable
+        ? {
+            illustrate: tool({
+              description:
+                "Generate a cinematic D&D art-style illustration of a scene from the campaign.",
+              inputSchema: z.object({
+                sceneDescription: z
+                  .string()
+                  .min(1)
+                  .describe("A vivid description of the scene to depict"),
+              }),
+              execute: async ({ sceneDescription }) => {
+                try {
+                  const prompt = [
+                    "Create a cinematic fantasy illustration in the style of classic Dungeons & Dragons concept art.",
+                    "Rich, dramatic lighting. Painterly style with bold composition. No text or UI elements.",
+                    `Scene: ${sceneDescription}`,
+                  ].join("\n");
+
+                  const result = await generateText({
+                    model: "google/gemini-3-pro-image",
+                    prompt,
+                  });
+
+                  const imageFile = result.files?.[0];
+                  if (!imageFile || !imageFile.base64) {
+                    return { ok: false, error: "No image was generated" };
+                  }
+
+                  // Increment daily usage counter
+                  const key = illustrateCacheKey(input.guildId);
+                  const current = (await cache.get<number>(key)) ?? 0;
+                  await cache.set(key, current + 1, ILLUSTRATE_TTL_SECONDS);
+
+                  actions.push({
+                    type: "image",
+                    base64: imageFile.base64,
+                    mimeType: imageFile.mediaType,
+                    caption: sceneDescription,
+                  });
+
+                  return { ok: true };
+                } catch (error) {
+                  console.error("Illustrate tool failed", error);
+                  return {
+                    ok: false,
+                    error:
+                      error instanceof Error
+                        ? error.message
+                        : "Image generation failed",
+                  };
+                }
+              },
+            }),
+          }
+        : {}),
       rememberFact: tool({
         description:
           "Store an important fact to remember for this campaign. Use for lore, character details, rules, or anything worth preserving.",
@@ -363,13 +441,16 @@ function createDiscordAgent(params: {
           source: z
             .string()
             .optional()
-            .describe("Who provided this information (defaults to message sender)"),
+            .describe(
+              "Who provided this information (defaults to message sender)",
+            ),
         }),
         execute: async ({ content, category, source }) => {
           if (!activeCampaignId) {
             return {
               ok: false,
-              error: "No active campaign. Cannot store memories without a campaign.",
+              error:
+                "No active campaign. Cannot store memories without a campaign.",
             };
           }
           await db.insert(memories).values({
@@ -404,8 +485,18 @@ export async function runDiscordAgent(
     });
   }
 
+  // Check daily illustration usage for this guild
+  const illustrateCount =
+    (await cache.get<number>(illustrateCacheKey(input.guildId))) ?? 0;
+  const illustrateAvailable = illustrateCount < ILLUSTRATE_DAILY_LIMIT;
+
   const actions: DiscordAgentAction[] = [];
-  const agent = createDiscordAgent({ input, actions, activeCampaignId });
+  const agent = createDiscordAgent({
+    input,
+    actions,
+    activeCampaignId,
+    illustrateAvailable,
+  });
   const result = await agent.generate({ prompt: buildPrompt(input) });
   const text = result.text?.trim();
 

@@ -32,6 +32,12 @@ export function createCommandRouter(params: {
         await msg.reply(chunk);
       }
     },
+    replyWithImage: async ({ buffer, filename, caption }) => {
+      await msg.reply({
+        content: caption || "",
+        files: [{ attachment: buffer, name: filename }],
+      });
+    },
   });
 
   const buildInteractionContext = (
@@ -84,6 +90,17 @@ export function createCommandRouter(params: {
           }
         }
       },
+      replyWithImage: async ({ buffer, filename, caption }) => {
+        const payload = {
+          content: caption || "",
+          files: [{ attachment: buffer, name: filename }],
+        };
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply(payload);
+        } else {
+          await interaction.reply(payload);
+        }
+      },
     };
   };
 
@@ -107,6 +124,9 @@ export function createCommandRouter(params: {
         const voiceOverride =
           interaction.options.getString("voice") ?? undefined;
         intent = { type: "say", text, voiceOverride };
+      } else if (sub === "scene") {
+        const prompt = interaction.options.getString("prompt", true);
+        intent = { type: "scene", prompt };
       }
     } else if (interaction.commandName === "campaign") {
       const sub = interaction.options.getSubcommand();

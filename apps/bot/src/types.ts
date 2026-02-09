@@ -10,6 +10,11 @@ export type CommandContext = {
   userDisplayName: string;
   voiceChannelId?: string;
   reply: ReplyFn;
+  replyWithImage: (image: {
+    buffer: Buffer;
+    filename: string;
+    caption?: string;
+  }) => Promise<void>;
 };
 
 export type CommandIntent =
@@ -19,6 +24,7 @@ export type CommandIntent =
   | { type: "recap" }
   | { type: "say"; text: string; voiceOverride?: string }
   | { type: "agent"; message: string }
+  | { type: "scene"; prompt: string }
   | { type: "campaign_create"; name: string; description?: string }
   | { type: "campaign_list" }
   | { type: "campaign_select"; name: string };

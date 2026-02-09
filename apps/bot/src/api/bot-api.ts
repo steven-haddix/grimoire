@@ -2,7 +2,8 @@ import type { BotConfig } from "../config";
 
 export type AgentAction =
   | { type: "reply"; content: string }
-  | { type: "say"; text: string; voice?: string };
+  | { type: "say"; text: string; voice?: string }
+  | { type: "image"; base64: string; mimeType: string; caption?: string };
 
 export type AgentResponse = {
   actions: AgentAction[];
@@ -75,6 +76,13 @@ function isAgentAction(value: unknown): value is AgentAction {
   }
   if (value.type === "say") {
     return typeof value.text === "string" && value.text.trim().length > 0;
+  }
+  if (value.type === "image") {
+    return (
+      typeof value.base64 === "string" &&
+      value.base64.length > 0 &&
+      typeof value.mimeType === "string"
+    );
   }
   return false;
 }

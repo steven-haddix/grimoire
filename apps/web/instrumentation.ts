@@ -7,6 +7,7 @@ const hasLangfuseKeys = Boolean(
 
 export function register() {
   if (!hasLangfuseKeys) {
+    console.log("Langfuse keys not found, skipping OTel registration");
     return;
   }
 

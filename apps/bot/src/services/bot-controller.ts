@@ -98,6 +98,14 @@ export function createBotController(params: {
     });
   };
 
+  const handleScene = async (ctx: CommandContext, intent: CommandIntent) => {
+    if (intent.type !== "scene") return;
+    await handleAgent(ctx, {
+      type: "agent",
+      message: `Please illustrate this scene: ${intent.prompt}`,
+    });
+  };
+
   const handleSay = async (ctx: CommandContext, intent: CommandIntent) => {
     if (intent.type !== "say") return;
 
@@ -143,6 +151,17 @@ export function createBotController(params: {
       for (const action of actions) {
         if (action.type === "reply") {
           await ctx.reply(action.content);
+          continue;
+        }
+
+        if (action.type === "image") {
+          const ext = action.mimeType === "image/png" ? "png" : "jpg";
+          const buffer = Buffer.from(action.base64, "base64");
+          await ctx.replyWithImage({
+            buffer,
+            filename: `scene.${ext}`,
+            caption: action.caption,
+          });
           continue;
         }
 
@@ -251,6 +270,11 @@ export function createBotController(params: {
 
     if (intent.type === "say") {
       await handleSay(ctx, intent);
+      return;
+    }
+
+    if (intent.type === "scene") {
+      await handleScene(ctx, intent);
       return;
     }
 

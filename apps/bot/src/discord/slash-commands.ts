@@ -39,6 +39,17 @@ export function buildGrimCommands() {
               )
               .setRequired(false),
           ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("scene")
+          .setDescription("Generate a D&D art scene from the current session")
+          .addStringOption((opt) =>
+            opt
+              .setName("prompt")
+              .setDescription("What scene to illustrate")
+              .setRequired(true),
+          ),
       ),
     new SlashCommandBuilder()
       .setName("campaign")
