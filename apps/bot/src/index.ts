@@ -16,7 +16,6 @@ import { createAllTtsProvidersFromEnv } from "./tts";
 import { VoicePersonaManager } from "./tts/voice-personas";
 
 const DEFAULT_STT_CONFIG = {
-  model: "nova-3",
   smartFormat: true,
   encoding: "opus",
   sampleRate: 48000,

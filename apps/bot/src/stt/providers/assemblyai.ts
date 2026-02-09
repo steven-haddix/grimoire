@@ -1,5 +1,6 @@
 import { AssemblyAI, type BeginEvent, type TurnEvent } from "assemblyai";
 import { opus } from "prism-media";
+import { downsample48kStereoTo16kMono } from "../audio-utils";
 import type {
   SttProvider,
   SttStream,
@@ -78,16 +79,7 @@ export class AssemblyAISttProvider implements SttProvider {
       decoder = this.createDecoder();
 
       decoder.on("data", (pcm: Buffer) => {
-        // Downsample 48kHz Stereo to 16kHz Mono
-        const downsampled = Buffer.alloc(pcm.length / 6);
-        let j = 0;
-        for (let i = 0; i < pcm.length; i += 12) {
-          if (j + 1 < downsampled.length) {
-            const sample = pcm.readInt16LE(i);
-            downsampled.writeInt16LE(sample, j);
-            j += 2;
-          }
-        }
+        const downsampled = downsample48kStereoTo16kMono(pcm);
         pcmBuffer = Buffer.concat([pcmBuffer, downsampled]);
 
         while (pcmBuffer.length >= targetChunkBytes) {
@@ -151,7 +143,7 @@ export class AssemblyAISttProvider implements SttProvider {
           transcriber.sendAudio(data);
         }
       },
-      close: () => {
+      close: async () => {
         decoder?.destroy();
         transcriber.close();
       },

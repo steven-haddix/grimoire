@@ -27,7 +27,7 @@ function createFakeSttService() {
         send(chunk: Uint8Array | ArrayBuffer) {
           created.sentChunks.push(chunk);
         },
-        close() {
+        async close() {
           created.closeCalls += 1;
         },
       };
@@ -86,7 +86,7 @@ describe("TranscriptionService", () => {
     expect(sinkCalls).toHaveLength(0);
   });
 
-  test("clearSession tears down pending streams and closes active STT session", () => {
+  test("clearSession tears down pending streams and closes active STT session", async () => {
     const { sttService, createdStreams } = createFakeSttService();
     const sinkCalls: Array<Parameters<TranscriptSink["ingest"]>[0]> = [];
 
@@ -106,7 +106,7 @@ describe("TranscriptionService", () => {
     });
 
     expect(createdStreams).toHaveLength(1);
-    service.clearSession("guild-2");
+    await service.clearSession("guild-2");
 
     expect(pendingStream.destroyed).toBe(true);
     expect(createdStreams[0]?.closeCalls).toBe(1);
