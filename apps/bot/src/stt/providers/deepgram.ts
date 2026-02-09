@@ -49,7 +49,7 @@ export class DeepgramSttProvider implements SttProvider {
       send: (chunk: any) => {
         dgLive.send(chunk);
       },
-      close: () => {
+      close: async () => {
         dgLive.requestClose();
       },
     };

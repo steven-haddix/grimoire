@@ -51,6 +51,17 @@ Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 - `DISCORD_TOKEN`
 - `DISCORD_APP_ID` (Discord Application ID; required for slash command registration)
 - `DEEPGRAM_API_KEY`
+- `ASSEMBLYAI_API_KEY` (if using AssemblyAI STT)
+- `MISTRAL_API_KEY` (if using Mistral STT)
+- `STT_PROVIDER` (optional; `deepgram`, `assemblyai`, `mistral`, or `mistral-realtime`)
+- `MISTRAL_BASE_URL` (optional; defaults to `https://api.mistral.ai`)
+- `MISTRAL_FLUSH_INTERVAL_MS` (optional; batch mistral only)
+- `MISTRAL_CONTEXT_BIAS` (optional; batch mistral only)
+- `MISTRAL_REALTIME_MODEL` (optional; realtime mistral only)
+- `MISTRAL_REALTIME_CONNECT_TIMEOUT_MS` (optional; realtime mistral only)
+- `MISTRAL_REALTIME_SILENCE_TIMEOUT_MS` (optional; realtime mistral only)
+- `MISTRAL_REALTIME_MAX_QUEUE_BYTES` (optional; realtime mistral only)
+- `MISTRAL_REALTIME_MAX_BUFFERED_TEXT_CHARS` (optional; realtime mistral only)
 - `TTS_PROVIDER` (optional; `deepgram`, `elevenlabs`, or `cartesia`)
 - `TTS_VOICE` (provider voice id/name)
 - `TTS_VOICE_OPTIONS` (optional JSON object string)

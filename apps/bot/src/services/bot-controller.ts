@@ -75,11 +75,11 @@ export function createBotController(params: {
     if (sessionId) {
       await ctx.reply("🛑 Session ended. Summarizing...");
 
+      await transcription.clearSession(ctx.guildId);
+
       api
         .summarizeSession(sessionId)
         .catch((err) => console.error("Summarize failed", err));
-
-      transcription.clearSession(ctx.guildId);
     }
   };
 

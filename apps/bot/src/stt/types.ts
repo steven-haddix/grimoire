@@ -21,7 +21,7 @@ export type SttStreamHandlers = {
 
 export type SttStream = {
   send: (chunk: Uint8Array | ArrayBuffer) => void;
-  close: () => void;
+  close: () => Promise<void>;
 };
 
 export interface SttProvider {

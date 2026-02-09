@@ -17,9 +17,9 @@ export class TranscriptionService {
     this.sessionMap.set(guildId, sessionId);
   }
 
-  clearSession(guildId: string) {
+  async clearSession(guildId: string) {
     this.sessionMap.delete(guildId);
-    this.closeGuildSpeakerSessions(guildId);
+    await this.closeGuildSpeakerSessions(guildId);
   }
 
   hasSession(guildId: string) {
@@ -41,7 +41,7 @@ export class TranscriptionService {
     const streamKey = `${params.guildId}:${params.userId}`;
     const existingSession = this.speakerSessions.get(streamKey);
     if (existingSession && !existingSession.matchesSessionId(sessionId)) {
-      existingSession.close();
+      void existingSession.close();
       this.speakerSessions.delete(streamKey);
     }
 
@@ -57,11 +57,16 @@ export class TranscriptionService {
     speakerSession.handleAudioStream(params.stream);
   }
 
-  private closeGuildSpeakerSessions(guildId: string) {
+  private async closeGuildSpeakerSessions(guildId: string) {
+    const closePromises: Promise<void>[] = [];
     for (const [key, speakerSession] of this.speakerSessions) {
       if (!key.startsWith(`${guildId}:`)) continue;
       this.speakerSessions.delete(key);
-      speakerSession.close();
+      closePromises.push(speakerSession.close());
+    }
+
+    if (closePromises.length) {
+      await Promise.allSettled(closePromises);
     }
   }
 
@@ -107,6 +112,8 @@ class SpeakerSession {
   private sttStream: SttStream | null = null;
   private pendingAudio: PendingAudio | null = null;
   private detachActiveAudio: (() => void) | null = null;
+  private pendingIngests = new Set<Promise<void>>();
+  private shutdownPromise: Promise<void> | null = null;
   private closed = false;
 
   constructor(private params: SpeakerSessionParams) {
@@ -125,7 +132,7 @@ class SpeakerSession {
           this.params.resolveSpeaker(this.params.userId, this.params.guildId) ??
           "Unknown";
 
-        this.params.sink
+        const ingestPromise = this.params.sink
           .ingest({
             sessionId: this.params.sessionId,
             speaker,
@@ -133,13 +140,17 @@ class SpeakerSession {
             timestamp: new Date().toISOString(),
           })
           .catch((err) => console.error("Ingest failed", err));
+        this.pendingIngests.add(ingestPromise);
+        ingestPromise.finally(() => {
+          this.pendingIngests.delete(ingestPromise);
+        });
       },
       onError: (error) => {
         console.error("STT error", error);
-        this.shutdown(true);
+        void this.shutdown(true);
       },
       onClose: () => {
-        this.shutdown(false);
+        void this.shutdown(false);
       },
     });
   }
@@ -154,9 +165,14 @@ class SpeakerSession {
       return;
     }
 
-    if (this.pendingAudio || this.detachActiveAudio) {
-      destroyStream(stream);
-      return;
+    // Swap out old stream — the new stream has fresh audio
+    if (this.detachActiveAudio) {
+      this.detachActiveAudio();
+    }
+    if (this.pendingAudio) {
+      this.pendingAudio.detach();
+      destroyStream(this.pendingAudio.stream);
+      this.pendingAudio = null;
     }
 
     if (this.state === "open") {
@@ -168,7 +184,7 @@ class SpeakerSession {
   }
 
   close() {
-    this.shutdown(true);
+    return this.shutdown(true);
   }
 
   private flushPendingAudio() {
@@ -245,7 +261,7 @@ class SpeakerSession {
       } catch (err) {
         console.error("STT send failed", err);
         cleanup();
-        this.shutdown(true);
+        void this.shutdown(true);
       }
     };
 
@@ -263,31 +279,40 @@ class SpeakerSession {
     stream.once("error", onError);
   }
 
-  private shutdown(shouldCloseStt: boolean) {
-    if (this.closed) return;
-    this.closed = true;
-    this.state = "closed";
+  private async shutdown(shouldCloseStt: boolean) {
+    if (this.shutdownPromise) return this.shutdownPromise;
+    this.shutdownPromise = (async () => {
+      if (this.closed) return;
+      this.closed = true;
+      this.state = "closed";
 
-    const pending = this.pendingAudio;
-    this.pendingAudio = null;
-    if (pending) {
-      pending.detach();
-      destroyStream(pending.stream);
-    }
+      const pending = this.pendingAudio;
+      this.pendingAudio = null;
+      if (pending) {
+        pending.detach();
+        destroyStream(pending.stream);
+      }
 
-    const detachActiveAudio = this.detachActiveAudio;
-    this.detachActiveAudio = null;
-    detachActiveAudio?.();
+      const detachActiveAudio = this.detachActiveAudio;
+      this.detachActiveAudio = null;
+      detachActiveAudio?.();
 
-    const sttStream = this.sttStream;
-    this.sttStream = null;
-    if (shouldCloseStt) {
-      try {
-        sttStream?.close();
-      } catch {}
-    }
+      this.params.onClosed();
 
-    this.params.onClosed();
+      const sttStream = this.sttStream;
+      this.sttStream = null;
+      if (shouldCloseStt) {
+        try {
+          await sttStream?.close();
+        } catch {}
+      }
+
+      if (this.pendingIngests.size) {
+        await Promise.allSettled(this.pendingIngests);
+      }
+    })();
+
+    return this.shutdownPromise;
   }
 }
 
