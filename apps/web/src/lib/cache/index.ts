@@ -1,8 +1,7 @@
-import { UpstashRedisCache } from './providers/upstash-redis';
+import { RedisCache } from './providers/redis';
 import type { CacheService } from './types';
 
-// In the future, we can switch implementations here based on environment variables
-const cache: CacheService = new UpstashRedisCache();
+const cache: CacheService = new RedisCache();
 
 export { cache };
 export type { CacheService };

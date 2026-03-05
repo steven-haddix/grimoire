@@ -7,6 +7,9 @@ RUN bun install --frozen-lockfile
 FROM deps AS builder
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Dummy env vars so module-level checks pass during build (not used at runtime)
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+ENV REDIS_URL=redis://localhost:6379
 RUN bun run build
 
 FROM node:25-alpine AS runner
