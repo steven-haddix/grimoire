@@ -22,6 +22,13 @@ export function startBotHttpServer(params: {
       const url = new URL(req.url);
       const match = url.pathname.match(/^\/guilds\/([^/]+)\/installed$/);
 
+      if (req.method === "GET" && url.pathname === "/health") {
+        return new Response(
+          JSON.stringify({ status: client.isReady() ? "ok" : "starting" }),
+          { status: client.isReady() ? 200 : 503, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
       if (req.method !== "GET" || !match) {
         return new Response("Not Found", { status: 404 });
       }
