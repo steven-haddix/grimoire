@@ -23,9 +23,14 @@ export function startBotHttpServer(params: {
       const match = url.pathname.match(/^\/guilds\/([^/]+)\/installed$/);
 
       if (req.method === "GET" && url.pathname === "/health") {
+        // Coolify uses this endpoint for liveness. Returning 503 until Discord
+        // is ready causes rollout failures even when the bot process is healthy.
         return new Response(
-          JSON.stringify({ status: client.isReady() ? "ok" : "starting" }),
-          { status: client.isReady() ? 200 : 503, headers: { "Content-Type": "application/json" } },
+          JSON.stringify({
+            status: "ok",
+            discordReady: client.isReady(),
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
 
