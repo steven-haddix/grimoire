@@ -1,12 +1,12 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { db } from "@/db";
 import { botGuilds, campaigns } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
-import { eq, and } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 
 export async function createCampaign(formData: FormData) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -38,7 +38,7 @@ export async function createCampaign(formData: FormData) {
       name,
       description,
     })
-    .returning({ id: campaigns.id });
+    .returning();
 
   if (!newCampaign) {
     throw new Error("Failed to create campaign");
@@ -127,7 +127,7 @@ export async function updateCampaign(formData: FormData) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new Error("Unauthorized");
 
-  const campaignId = parseInt(formData.get("campaignId") as string);
+  const campaignId = Number.parseInt(formData.get("campaignId") as string, 10);
   const guildId = formData.get("guildId") as string;
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;

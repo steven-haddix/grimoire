@@ -1,7 +1,7 @@
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { sessions, botGuilds } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { botGuilds, sessions } from "@/db/schema";
 
 type SessionStartPayload = {
   guildId: string;
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
       campaignId: guildData?.activeCampaignId,
       status: "active",
     })
-    .returning({ id: sessions.id });
+    .returning();
 
   return NextResponse.json({ sessionId: newSession?.id });
 }
