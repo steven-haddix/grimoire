@@ -46,6 +46,40 @@ export function createVoiceManager(params: {
     return connection;
   };
 
+  const getReadyConnection = async (input: {
+    guildId: string;
+    channelId: string;
+  }) => {
+    const existing = getVoiceConnection(input.guildId);
+    const existingChannelId =
+      typeof existing?.joinConfig.channelId === "string"
+        ? existing.joinConfig.channelId
+        : undefined;
+
+    if (existing) {
+      const isReusableStatus =
+        existing.state.status !== VoiceConnectionStatus.Destroyed &&
+        existing.state.status !== VoiceConnectionStatus.Disconnected;
+
+      if (isReusableStatus && existingChannelId === input.channelId) {
+        try {
+          return await ensureReady(existing);
+        } catch (error) {
+          console.warn(
+            `Existing voice connection for guild ${input.guildId} was not ready; recreating it.`,
+            error,
+          );
+        }
+      }
+
+      try {
+        existing.destroy();
+      } catch {}
+    }
+
+    return await ensureReady(joinVoice(input));
+  };
+
   const cleanupGuildConnection = (
     guildId: string,
     connection?: VoiceConnection,
@@ -79,10 +113,7 @@ export function createVoiceManager(params: {
   return {
     isConnected: (guildId: string) => Boolean(getVoiceConnection(guildId)),
     startListening: async ({ guildId, channelId }) => {
-      const existing = getVoiceConnection(guildId);
-      const connection = await ensureReady(
-        existing ?? joinVoice({ guildId, channelId }),
-      );
+      const connection = await getReadyConnection({ guildId, channelId });
       attachReceiver(connection, guildId);
       getGuildSpeechQueue({ guildId, connection, tts });
     },
@@ -101,10 +132,10 @@ export function createVoiceManager(params: {
       voice,
       shouldDisconnect,
     }) => {
-      const existing = getVoiceConnection(guildId);
-      const connection = await ensureReady(
-        existing ?? joinVoice({ guildId, channelId: voiceChannelId }),
-      );
+      const connection = await getReadyConnection({
+        guildId,
+        channelId: voiceChannelId,
+      });
       const queue = getGuildSpeechQueue({ guildId, connection, tts });
       await queue.speak(text, voice);
 
