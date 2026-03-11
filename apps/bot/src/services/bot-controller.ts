@@ -1,4 +1,4 @@
-import type { BotApi } from "../api/bot-api";
+import type { AgentAction, BotApi } from "../api/bot-api";
 import type { BotConfig } from "../config";
 import type { TtsVoiceConfig } from "../tts/types";
 import type { CommandContext, CommandIntent, VoiceGateway } from "../types";
@@ -138,8 +138,9 @@ export function createBotController(params: {
   const handleAgent = async (ctx: CommandContext, intent: CommandIntent) => {
     if (intent.type !== "agent") return;
 
+    let actions: AgentAction[];
     try {
-      const actions = await api.runAgent({
+      actions = await api.runAgent({
         guildId: ctx.guildId,
         channelId: ctx.channelId,
         userId: ctx.userId,
@@ -147,25 +148,31 @@ export function createBotController(params: {
         userDisplayName: ctx.userDisplayName,
         message: intent.message,
       });
+    } catch (error) {
+      console.error("Agent request failed", error);
+      await ctx.reply("❌ Agent request failed. Check the API.");
+      return;
+    }
 
-      for (const action of actions) {
-        if (action.type === "reply") {
-          await ctx.reply(action.content);
-          continue;
-        }
+    for (const action of actions) {
+      if (action.type === "reply") {
+        await ctx.reply(action.content);
+        continue;
+      }
 
-        if (action.type === "image") {
-          const ext = action.mimeType === "image/png" ? "png" : "jpg";
-          const buffer = Buffer.from(action.base64, "base64");
-          await ctx.replyWithImage({
-            buffer,
-            filename: `scene.${ext}`,
-            caption: action.caption,
-          });
-          continue;
-        }
+      if (action.type === "image") {
+        const ext = action.mimeType === "image/png" ? "png" : "jpg";
+        const buffer = Buffer.from(action.base64, "base64");
+        await ctx.replyWithImage({
+          buffer,
+          filename: `scene.${ext}`,
+          caption: action.caption,
+        });
+        continue;
+      }
 
-        if (action.type === "say") {
+      if (action.type === "say") {
+        try {
           if (ctx.voiceChannelId) {
             const voiceConfig = buildVoiceConfig(config, action.voice);
             await voice.speak({
@@ -178,11 +185,14 @@ export function createBotController(params: {
           } else {
             await ctx.reply(action.text);
           }
+        } catch (error) {
+          console.error("Agent TTS action failed", error);
+          await ctx.reply(
+            "❌ TTS failed. Check Discord voice connection and logs.",
+          );
+          return;
         }
       }
-    } catch (error) {
-      console.error("Agent request failed", error);
-      await ctx.reply("❌ Agent request failed. Check the API.");
     }
   };
 

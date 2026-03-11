@@ -24,33 +24,59 @@ function getAdapterCreator(
   return guild.voiceAdapterCreator;
 }
 
-export function createVoiceManager(params: {
-  client: Client;
-  tts: TtsService;
-  transcription: TranscriptionService;
-}): VoiceGateway {
+function describeConnection(connection: VoiceConnection) {
+  const channelId =
+    typeof connection.joinConfig.channelId === "string"
+      ? connection.joinConfig.channelId
+      : "unknown";
+
+  return `state=${connection.state.status} channel=${channelId}`;
+}
+
+export function createVoiceManager(
+  params: {
+    client: Client;
+    tts: TtsService;
+    transcription: TranscriptionService;
+  },
+  deps = {
+    entersState,
+    getGuildSpeechQueue,
+    getVoiceConnection,
+    joinVoiceChannel,
+    removeGuildSpeechQueue,
+  },
+): VoiceGateway {
   const { client, tts, transcription } = params;
   const attachedReceivers = new Set<string>();
 
   const joinVoice = (input: { guildId: string; channelId: string }) =>
-    joinVoiceChannel({
+    deps.joinVoiceChannel({
       channelId: input.channelId,
       guildId: input.guildId,
       adapterCreator: getAdapterCreator(client, input.guildId),
       selfDeaf: false,
-      daveEncryption: false,
+      // Discord voice requires DAVE/E2EE as of 2026-03-01.
+      daveEncryption: true,
     });
 
   const ensureReady = async (connection: VoiceConnection) => {
-    await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-    return connection;
+    try {
+      await deps.entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+      return connection;
+    } catch (error) {
+      throw new Error(
+        `Voice connection failed to become ready (${describeConnection(connection)})`,
+        { cause: error },
+      );
+    }
   };
 
   const getReadyConnection = async (input: {
     guildId: string;
     channelId: string;
   }) => {
-    const existing = getVoiceConnection(input.guildId);
+    const existing = deps.getVoiceConnection(input.guildId);
     const existingChannelId =
       typeof existing?.joinConfig.channelId === "string"
         ? existing.joinConfig.channelId
@@ -89,7 +115,7 @@ export function createVoiceManager(params: {
         connection.destroy();
       } catch {}
     }
-    removeGuildSpeechQueue(guildId);
+    deps.removeGuildSpeechQueue(guildId);
     attachedReceivers.delete(guildId);
   };
 
@@ -111,14 +137,14 @@ export function createVoiceManager(params: {
   };
 
   return {
-    isConnected: (guildId: string) => Boolean(getVoiceConnection(guildId)),
+    isConnected: (guildId: string) => Boolean(deps.getVoiceConnection(guildId)),
     startListening: async ({ guildId, channelId }) => {
       const connection = await getReadyConnection({ guildId, channelId });
       attachReceiver(connection, guildId);
-      getGuildSpeechQueue({ guildId, connection, tts });
+      deps.getGuildSpeechQueue({ guildId, connection, tts });
     },
     stopListening: (guildId: string) => {
-      const connection = getVoiceConnection(guildId);
+      const connection = deps.getVoiceConnection(guildId);
       if (connection) {
         cleanupGuildConnection(guildId, connection);
       } else {
@@ -136,7 +162,7 @@ export function createVoiceManager(params: {
         guildId,
         channelId: voiceChannelId,
       });
-      const queue = getGuildSpeechQueue({ guildId, connection, tts });
+      const queue = deps.getGuildSpeechQueue({ guildId, connection, tts });
       await queue.speak(text, voice);
 
       if (shouldDisconnect && !transcription.hasSession(guildId)) {

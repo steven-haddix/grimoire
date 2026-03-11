@@ -2,9 +2,9 @@
   "default": "narrator",
   "personas": {
     "narrator": {
-      "provider": "elevenlabs",
-      "voiceId": "TNLYP9cY4PGKenxHHG9T",
-      "options": { "modelId": "eleven_flash_v2_5" }
+      "provider": "cartesia",
+      "voiceId": "87748186-23bb-4158-a1eb-332911b0b708",
+      "options": { "modelId": "sonic-3" }
     },
     "wizard": {
       "provider": "cartesia",

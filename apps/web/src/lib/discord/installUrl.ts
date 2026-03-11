@@ -6,10 +6,17 @@ type InstallUrlParams = {
   state?: string;
 };
 
+export const DEFAULT_BOT_INSTALL_PERMISSIONS =
+  1024 + // ViewChannel
+  2048 + // SendMessages
+  32768 + // AttachFiles
+  1048576 + // Connect
+  2097152; // Speak
+
 export function buildDiscordBotInstallUrl({
   clientId,
   guildId,
-  permissions = 1049600,
+  permissions = DEFAULT_BOT_INSTALL_PERMISSIONS,
   redirectUri,
   state,
 }: InstallUrlParams) {

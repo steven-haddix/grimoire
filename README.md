@@ -112,3 +112,4 @@ fly deploy
 - If `nova-3` is unavailable in your Deepgram plan or region, update the bot config to `model: "nova-2"`.
 - Discord message content intent should be enabled if you want the bot to read mention prompts for the agent.
 - TTS playback requires `ffmpeg` installed on the host/container.
+- Discord voice sessions now require DAVE/E2EE. Keep `daveEncryption` enabled and ensure `@snazzah/davey` is installed for the bot.
