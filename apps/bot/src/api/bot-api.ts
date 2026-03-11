@@ -96,7 +96,11 @@ function parseAgentResponse(value: unknown): AgentResponse | null {
 }
 
 export function createBotApi(config: BotConfig): BotApi {
-  const postBotJson = async (path: string, payload: unknown, context: string) => {
+  const postBotJson = async (
+    path: string,
+    payload: unknown,
+    context: string,
+  ) => {
     const res = await fetch(`${config.apiBase}${path}`, {
       method: "POST",
       headers: {
@@ -107,7 +111,7 @@ export function createBotApi(config: BotConfig): BotApi {
     });
 
     if (!res.ok) {
-      const details = await res.text().catch(() => "");
+      const details = await res.text();
       throw new Error(
         `${context} failed (${res.status}): ${details || "No details"}`,
       );
@@ -137,11 +141,7 @@ export function createBotApi(config: BotConfig): BotApi {
       );
     },
     syncGuildPresence: async (guilds) => {
-      await postBotJson(
-        "/bot/guilds/sync",
-        { guilds },
-        "Guild presence sync",
-      );
+      await postBotJson("/bot/guilds/sync", { guilds }, "Guild presence sync");
     },
     startSession: async ({ guildId, channelId }) => {
       const res = await postBotJson(
@@ -160,18 +160,10 @@ export function createBotApi(config: BotConfig): BotApi {
       );
     },
     summarizeSession: async (sessionId) => {
-      await postBotJson(
-        "/summarize",
-        { sessionId },
-        "Session summarize",
-      );
+      await postBotJson("/summarize", { sessionId }, "Session summarize");
     },
     runAgent: async (input) => {
-      const res = await postBotJson(
-        "/agent/discord",
-        input,
-        "Agent request",
-      );
+      const res = await postBotJson("/agent/discord", input, "Agent request");
 
       const parsed = parseAgentResponse(await res.json().catch(() => null));
       if (!parsed) {
@@ -193,11 +185,14 @@ export function createBotApi(config: BotConfig): BotApi {
       return (await res.json()) as Campaign;
     },
     listCampaigns: async (guildId) => {
-      const res = await fetch(`${config.apiBase}/bot/campaigns?guildId=${guildId}`, {
-        headers: {
-          "x-bot-secret": config.botSecret,
+      const res = await fetch(
+        `${config.apiBase}/bot/campaigns?guildId=${guildId}`,
+        {
+          headers: {
+            "x-bot-secret": config.botSecret,
+          },
         },
-      });
+      );
       if (!res.ok) {
         throw new Error("List campaigns failed");
       }
