@@ -34,7 +34,9 @@ export const botGuilds = pgTable("bot_guilds", {
   guildId: text("guild_id").primaryKey(),
   name: text("name").notNull(),
   icon: text("icon"),
-  activeCampaignId: integer("active_campaign_id").references(() => campaigns.id),
+  activeCampaignId: integer("active_campaign_id").references(
+    () => campaigns.id,
+  ),
   installed: boolean("installed").notNull().default(true),
   installedAt: timestamp("installed_at", { withTimezone: true })
     .notNull()
@@ -61,6 +63,18 @@ export const summaries = pgTable("summaries", {
     .notNull()
     .references(() => sessions.id, { onDelete: "cascade" }),
   text: text("text").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const sessionNotes = pgTable("session_notes", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => sessions.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  source: text("source").notNull(),
+  createdByUserId: text("created_by_user_id").notNull(),
+  createdByName: text("created_by_name").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -102,6 +116,7 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
   }),
   transcripts: many(transcripts),
   summaries: many(summaries),
+  notes: many(sessionNotes),
 }));
 
 export const botGuildsRelations = relations(botGuilds, ({ one }) => ({
@@ -121,6 +136,13 @@ export const transcriptsRelations = relations(transcripts, ({ one }) => ({
 export const summariesRelations = relations(summaries, ({ one }) => ({
   session: one(sessions, {
     fields: [summaries.sessionId],
+    references: [sessions.id],
+  }),
+}));
+
+export const sessionNotesRelations = relations(sessionNotes, ({ one }) => ({
+  session: one(sessions, {
+    fields: [sessionNotes.sessionId],
     references: [sessions.id],
   }),
 }));

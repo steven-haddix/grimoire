@@ -7,7 +7,7 @@ import { notFound, redirect } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CampaignActions } from "@/components/campaign-actions";
-import { ExpandableDescription } from "./expandable-description";
+import { SessionNotesDialog } from "@/components/session-notes-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,9 +18,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { db } from "@/db";
-import { botGuilds, campaigns, sessions, summaries } from "@/db/schema";
+import {
+  botGuilds,
+  campaigns,
+  sessionNotes,
+  sessions,
+  summaries,
+} from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
+import { ExpandableDescription } from "./expandable-description";
 
 interface CampaignPageProps {
   params: Promise<{ id: string }>;
@@ -88,12 +95,29 @@ export default async function CampaignPage(props: CampaignPageProps) {
           .orderBy(desc(summaries.createdAt))
       : [];
 
+  const notes =
+    sessionIds.length > 0
+      ? await db
+          .select()
+          .from(sessionNotes)
+          .where(inArray(sessionNotes.sessionId, sessionIds))
+          .orderBy(desc(sessionNotes.createdAt))
+      : [];
+
   const summariesBySession = new Map();
   for (const summary of sessionSummaries) {
     if (!summariesBySession.has(summary.sessionId)) {
       summariesBySession.set(summary.sessionId, []);
     }
     summariesBySession.get(summary.sessionId).push(summary);
+  }
+
+  const notesBySession = new Map();
+  for (const note of notes) {
+    if (!notesBySession.has(note.sessionId)) {
+      notesBySession.set(note.sessionId, []);
+    }
+    notesBySession.get(note.sessionId).push(note);
   }
 
   const activeSessions = campaignSessions.filter((s) => s.status === "active");
@@ -176,10 +200,26 @@ export default async function CampaignPage(props: CampaignPageProps) {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Recording in progress. Summaries will be generated when the
-                    session ends.
-                  </p>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Recording in progress. Summaries will be generated when
+                        the session ends.
+                      </p>
+                      {(notesBySession.get(s.id)?.length ?? 0) > 0 && (
+                        <Badge variant="secondary">
+                          {notesBySession.get(s.id).length} note
+                          {notesBySession.get(s.id).length === 1 ? "" : "s"}{" "}
+                          attached
+                        </Badge>
+                      )}
+                    </div>
+                    <SessionNotesDialog
+                      sessionId={s.id}
+                      sessionStatus={s.status}
+                      notes={notesBySession.get(s.id) ?? []}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -203,6 +243,7 @@ export default async function CampaignPage(props: CampaignPageProps) {
           <div className="grid gap-6">
             {pastSessions.map((s) => {
               const sessionSummaryList = summariesBySession.get(s.id) || [];
+              const sessionNoteList = notesBySession.get(s.id) || [];
               const latestSummary = sessionSummaryList[0];
 
               return (
@@ -210,16 +251,31 @@ export default async function CampaignPage(props: CampaignPageProps) {
                   <CardHeader className="bg-secondary/30 pb-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
-                        <CardTitle className="text-lg">
-                          Session - {format(s.startedAt, "MMM d, yyyy")}
-                        </CardTitle>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <CardTitle className="text-lg">
+                            Session - {format(s.startedAt, "MMM d, yyyy")}
+                          </CardTitle>
+                          {sessionNoteList.length > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {sessionNoteList.length} note
+                              {sessionNoteList.length === 1 ? "" : "s"}
+                            </Badge>
+                          )}
+                        </div>
                         <CardDescription className="flex items-center gap-2 mt-1">
                           <Clock className="h-3.5 w-3.5" />
                           {format(s.startedAt, "p")}
                           {s.endedAt && ` - ${format(s.endedAt, "p")}`}
                         </CardDescription>
                       </div>
-                      <Badge variant="secondary">{s.status}</Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{s.status}</Badge>
+                        <SessionNotesDialog
+                          sessionId={s.id}
+                          sessionStatus={s.status}
+                          notes={sessionNoteList}
+                        />
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-6">

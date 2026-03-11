@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { db } from "@/db";
-import { campaigns, sessions, summaries } from "@/db/schema";
+import { campaigns, sessionNotes, sessions, summaries } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
 import { SessionsList } from "./sessions-list";
@@ -55,6 +55,15 @@ export default async function SessionsPage() {
           .orderBy(desc(summaries.createdAt))
       : [];
 
+  const notes =
+    sessionIds.length > 0
+      ? await db
+          .select()
+          .from(sessionNotes)
+          .where(inArray(sessionNotes.sessionId, sessionIds))
+          .orderBy(desc(sessionNotes.createdAt))
+      : [];
+
   const summariesBySession: Record<number, typeof sessionSummaries> = {};
   for (const summary of sessionSummaries) {
     const list = summariesBySession[summary.sessionId] ?? [];
@@ -62,12 +71,21 @@ export default async function SessionsPage() {
     summariesBySession[summary.sessionId] = list;
   }
 
+  const notesBySession: Record<number, typeof notes> = {};
+  for (const note of notes) {
+    const list = notesBySession[note.sessionId] ?? [];
+    list.push(note);
+    notesBySession[note.sessionId] = list;
+  }
+
   return (
     <SessionsList
       sessions={userSessions}
       campaigns={userCampaigns}
       summariesBySession={summariesBySession}
+      notesBySession={notesBySession}
       guildMap={guildMap}
+      guilds={userGuilds.map((guild) => ({ id: guild.id, name: guild.name }))}
     />
   );
 }

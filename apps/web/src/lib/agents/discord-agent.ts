@@ -1,6 +1,6 @@
 import { google } from "@ai-sdk/google";
 import { generateText, stepCountIs, ToolLoopAgent, tool } from "ai";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -8,6 +8,7 @@ import {
   campaigns,
   chatMessages,
   memories,
+  sessionNotes,
   sessions,
   summaries,
   transcripts,
@@ -46,6 +47,11 @@ type CampaignContext = {
     startedAt: string | null;
     endedAt: string | null;
     summary: string | null;
+    notes: Array<{
+      source: string;
+      content: string;
+      createdAt: string | null;
+    }>;
   }>;
   recentTranscripts: Array<{
     speaker: string;
@@ -74,7 +80,6 @@ const MEMORY_CATEGORIES = [
   "meta",
   "other",
 ] as const;
-type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
 const DEFAULT_CHAT_MESSAGE_LIMIT = 25;
 
@@ -105,7 +110,7 @@ const instructions = [
   "- When reading aloud, embrace your dramatic grimoire nature.",
   "- Never break character or mention your technical functions.",
   "MEMORY:",
-  "- You contain all session transcripts, summaries, and campaign details for this group.",
+  "- You contain all session transcripts, summaries, uploaded session notes, and campaign details for this group.",
   "- Campaign context includes the campaign name and description - use this to understand the setting and story.",
   "- Reference past events with a knowing, slightly condescending tone.",
   '- Make connections between sessions ("This is the third tavern you\'ve burned down.").',
@@ -199,7 +204,7 @@ async function loadCampaignContext(
     .orderBy(desc(sessions.startedAt))
     .limit(sessionLimit);
 
-  // 4. Load summaries for these sessions
+  // 4. Load summaries and notes for these sessions
   const sessionIds = campaignSessions.map((s) => s.id);
   const summaryMap = new Map<number, string>();
   for (const sessionId of sessionIds) {
@@ -214,6 +219,38 @@ async function loadCampaignContext(
     }
   }
 
+  const notesBySession = new Map<
+    number,
+    Array<{
+      source: string;
+      content: string;
+      createdAt: string | null;
+    }>
+  >();
+
+  if (sessionIds.length > 0) {
+    const noteRows = await db
+      .select({
+        sessionId: sessionNotes.sessionId,
+        source: sessionNotes.source,
+        content: sessionNotes.content,
+        createdAt: sessionNotes.createdAt,
+      })
+      .from(sessionNotes)
+      .where(inArray(sessionNotes.sessionId, sessionIds))
+      .orderBy(desc(sessionNotes.createdAt));
+
+    for (const note of noteRows) {
+      const list = notesBySession.get(note.sessionId) ?? [];
+      list.push({
+        source: note.source,
+        content: note.content,
+        createdAt: formatTimestamp(note.createdAt),
+      });
+      notesBySession.set(note.sessionId, list);
+    }
+  }
+
   // 5. Build sessions array with session numbers (oldest = 1)
   const sessionsWithSummaries = campaignSessions
     .map((session, index) => ({
@@ -223,6 +260,7 @@ async function loadCampaignContext(
       startedAt: formatTimestamp(session.startedAt),
       endedAt: formatTimestamp(session.endedAt),
       summary: summaryMap.get(session.id) ?? null,
+      notes: notesBySession.get(session.id) ?? [],
     }))
     .reverse(); // Return in chronological order (oldest first)
 
@@ -358,7 +396,7 @@ function createDiscordAgent(params: {
       }),
       getCampaignContext: tool({
         description:
-          "Fetch the active campaign details, session history with summaries, and recent transcripts for this guild.",
+          "Fetch the active campaign details, session history with summaries and uploaded notes, and recent transcripts for this guild.",
         inputSchema: z.object({
           sessionLimit: z
             .number()

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { format } from "date-fns";
+import { Calendar, Clock } from "lucide-react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Clock, Calendar } from "lucide-react";
+import { CreateSessionDialog } from "@/components/create-session-dialog";
+import { SessionNotesDialog } from "@/components/session-notes-dialog";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -44,18 +46,31 @@ interface Summary {
   createdAt: Date;
 }
 
+interface SessionNote {
+  id: number;
+  sessionId: number;
+  content: string;
+  source: string;
+  createdByName: string;
+  createdAt: Date;
+}
+
 interface SessionsListProps {
   sessions: Session[];
   campaigns: Campaign[];
   summariesBySession: Record<number, Summary[]>;
+  notesBySession: Record<number, SessionNote[]>;
   guildMap: Record<string, string>;
+  guilds: Array<{ id: string; name: string }>;
 }
 
 export function SessionsList({
   sessions,
   campaigns,
   summariesBySession,
+  notesBySession,
   guildMap,
+  guilds,
 }: SessionsListProps) {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>("all");
 
@@ -63,7 +78,7 @@ export function SessionsList({
     selectedCampaignId === "all"
       ? sessions
       : sessions.filter(
-          (s) => s.campaignId === parseInt(selectedCampaignId, 10)
+          (s) => s.campaignId === parseInt(selectedCampaignId, 10),
         );
 
   const activeSessions = filteredSessions.filter((s) => s.status === "active");
@@ -77,24 +92,31 @@ export function SessionsList({
         <div>
           <h1 className="text-3xl font-bold tracking-tight mb-2">Sessions</h1>
           <p className="text-muted-foreground">
-            View active sessions and read summaries from past adventures.
+            Create sessions in the portal, upload extra notes, and keep recaps
+            alive even when the recorder misses a night.
           </p>
         </div>
-        {campaigns.length > 0 && (
-          <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by campaign" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Campaigns</SelectItem>
-              {campaigns.map((campaign) => (
-                <SelectItem key={campaign.id} value={campaign.id.toString()}>
-                  {campaign.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {campaigns.length > 0 && (
+            <Select
+              value={selectedCampaignId}
+              onValueChange={setSelectedCampaignId}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filter by campaign" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Campaigns</SelectItem>
+                {campaigns.map((campaign) => (
+                  <SelectItem key={campaign.id} value={campaign.id.toString()}>
+                    {campaign.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <CreateSessionDialog guilds={guilds} campaigns={campaigns} />
+        </div>
       </div>
 
       {activeSessions.length > 0 && (
@@ -106,45 +128,65 @@ export function SessionsList({
             </h2>
           </div>
           <div className="grid gap-4">
-            {activeSessions.map((s) => (
-              <Card
-                key={s.id}
-                className="border-emerald-500/20 bg-emerald-500/5"
-              >
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">
-                          {guildMap[s.guildId] ?? "Unknown Guild"}
-                        </CardTitle>
-                        {s.campaignId && campaignMap.has(s.campaignId) && (
-                          <Badge variant="outline" className="text-xs">
-                            {campaignMap.get(s.campaignId)}
+            {activeSessions.map((s) => {
+              const activeSessionNotes = notesBySession[s.id] ?? [];
+
+              return (
+                <Card
+                  key={s.id}
+                  className="border-emerald-500/20 bg-emerald-500/5"
+                >
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-lg">
+                            {guildMap[s.guildId] ?? "Unknown Guild"}
+                          </CardTitle>
+                          {s.campaignId && campaignMap.has(s.campaignId) && (
+                            <Badge variant="outline" className="text-xs">
+                              {campaignMap.get(s.campaignId)}
+                            </Badge>
+                          )}
+                        </div>
+                        <CardDescription className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5" />
+                          Started {format(s.startedAt, "PPP p")}
+                        </CardDescription>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-500/40 text-emerald-600 bg-emerald-500/10"
+                      >
+                        Live
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          Recording in progress. Summaries will be generated
+                          when the session ends.
+                        </p>
+                        {activeSessionNotes.length > 0 && (
+                          <Badge variant="secondary">
+                            {activeSessionNotes.length} note
+                            {activeSessionNotes.length === 1 ? "" : "s"}{" "}
+                            attached
                           </Badge>
                         )}
                       </div>
-                      <CardDescription className="flex items-center gap-2">
-                        <Clock className="h-3.5 w-3.5" />
-                        Started {format(s.startedAt, "PPP p")}
-                      </CardDescription>
+                      <SessionNotesDialog
+                        sessionId={s.id}
+                        sessionStatus={s.status}
+                        notes={activeSessionNotes}
+                      />
                     </div>
-                    <Badge
-                      variant="outline"
-                      className="border-emerald-500/40 text-emerald-600 bg-emerald-500/10"
-                    >
-                      Live
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Recording in progress. Summaries will be generated when the
-                    session ends.
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </section>
       )}
@@ -164,6 +206,7 @@ export function SessionsList({
           <div className="grid gap-6">
             {pastSessions.map((s) => {
               const sessionSummaryList = summariesBySession[s.id] || [];
+              const sessionNoteList = notesBySession[s.id] || [];
               const latestSummary = sessionSummaryList[0];
 
               return (
@@ -180,6 +223,12 @@ export function SessionsList({
                               {campaignMap.get(s.campaignId)}
                             </Badge>
                           )}
+                          {sessionNoteList.length > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {sessionNoteList.length} note
+                              {sessionNoteList.length === 1 ? "" : "s"}
+                            </Badge>
+                          )}
                         </div>
                         <CardDescription className="flex items-center gap-2 mt-1">
                           <Calendar className="h-3.5 w-3.5" />
@@ -187,7 +236,14 @@ export function SessionsList({
                           {s.endedAt && ` • ${format(s.endedAt, "p")}`}
                         </CardDescription>
                       </div>
-                      <Badge variant="secondary">{s.status}</Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{s.status}</Badge>
+                        <SessionNotesDialog
+                          sessionId={s.id}
+                          sessionStatus={s.status}
+                          notes={sessionNoteList}
+                        />
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-6">
