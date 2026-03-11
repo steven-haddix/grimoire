@@ -1,9 +1,11 @@
 import {
   type DiscordGatewayAdapterCreator,
   EndBehaviorType,
+  entersState,
   getVoiceConnection,
   joinVoiceChannel,
   type VoiceConnection,
+  VoiceConnectionStatus,
 } from "@discordjs/voice";
 import type { Client } from "discord.js";
 import type { TranscriptionService } from "../services/transcription-service";
@@ -39,6 +41,11 @@ export function createVoiceManager(params: {
       daveEncryption: false,
     });
 
+  const ensureReady = async (connection: VoiceConnection) => {
+    await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+    return connection;
+  };
+
   const cleanupGuildConnection = (
     guildId: string,
     connection?: VoiceConnection,
@@ -73,7 +80,9 @@ export function createVoiceManager(params: {
     isConnected: (guildId: string) => Boolean(getVoiceConnection(guildId)),
     startListening: async ({ guildId, channelId }) => {
       const existing = getVoiceConnection(guildId);
-      const connection = existing ?? joinVoice({ guildId, channelId });
+      const connection = await ensureReady(
+        existing ?? joinVoice({ guildId, channelId }),
+      );
       attachReceiver(connection, guildId);
       getGuildSpeechQueue({ guildId, connection, tts });
     },
@@ -93,8 +102,9 @@ export function createVoiceManager(params: {
       shouldDisconnect,
     }) => {
       const existing = getVoiceConnection(guildId);
-      const connection =
-        existing ?? joinVoice({ guildId, channelId: voiceChannelId });
+      const connection = await ensureReady(
+        existing ?? joinVoice({ guildId, channelId: voiceChannelId }),
+      );
       const queue = getGuildSpeechQueue({ guildId, connection, tts });
       await queue.speak(text, voice);
 

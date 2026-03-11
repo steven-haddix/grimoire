@@ -2,9 +2,9 @@
   "default": "narrator",
   "personas": {
     "narrator": {
-      "provider": "inworld",
-      "voiceId": "Hades",
-      "options": { "modelId": "inworld-tts-1.5-max" }
+      "provider": "elevenlabs",
+      "voiceId": "TNLYP9cY4PGKenxHHG9T",
+      "options": { "modelId": "eleven_flash_v2_5" }
     },
     "wizard": {
       "provider": "cartesia",
@@ -14,7 +14,7 @@
     "soldier": {
       "provider": "cartesia",
       "voiceId": "42b39f37-515f-4eee-8546-73e841679c1d",
-      "options": { "modelId": "eleven_flash_v2_5" }
+      "options": { "modelId": "sonic-3" }
     },
     "barkeeper": {
       "provider": "elevenlabs",

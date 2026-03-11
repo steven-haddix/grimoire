@@ -3,6 +3,32 @@ import { Readable } from "node:stream";
 import { responseToNodeStream } from "../streaming";
 import type { TtsProvider, TtsProviderName, TtsRequest } from "../types";
 
+function extractWavPayload(chunk: Buffer): Buffer {
+  if (chunk.length < 12) return chunk;
+  if (
+    chunk.subarray(0, 4).toString("ascii") !== "RIFF" ||
+    chunk.subarray(8, 12).toString("ascii") !== "WAVE"
+  ) {
+    return chunk;
+  }
+
+  let offset = 12;
+  while (offset + 8 <= chunk.length) {
+    const sectionId = chunk.subarray(offset, offset + 4).toString("ascii");
+    const sectionSize = chunk.readUInt32LE(offset + 4);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + sectionSize;
+
+    if (sectionId === "data") {
+      return chunk.subarray(dataStart, Math.min(dataEnd, chunk.length));
+    }
+
+    offset = dataEnd + (sectionSize % 2);
+  }
+
+  return chunk;
+}
+
 export class InworldTtsProvider implements TtsProvider {
   readonly name: TtsProviderName = "inworld";
 
@@ -21,9 +47,9 @@ export class InworldTtsProvider implements TtsProvider {
       text: req.text,
       voiceId: req.voice.voice,
       modelId: "inworld-tts-1.5-max",
-      audio_config: {
-        audio_encoding: "MP3",
-        sample_rate_hertz: 48000,
+      audioConfig: {
+        audioEncoding: "LINEAR16",
+        sampleRateHertz: 48000,
       },
     };
 
@@ -64,24 +90,35 @@ export class InworldTtsProvider implements TtsProvider {
       try {
         for await (const line of rl) {
           if (!line.trim()) continue;
-          
+
           try {
             const chunk = JSON.parse(line);
-            
+
             if (chunk.error) {
-              throw new Error(`Inworld Stream Error: ${JSON.stringify(chunk.error)}`);
+              throw new Error(
+                `Inworld Stream Error: ${JSON.stringify(chunk.error)}`,
+              );
             }
 
             if (chunk.result?.audioContent) {
-              const audioBuffer = Buffer.from(chunk.result.audioContent, "base64");
-              audioStream.push(audioBuffer);
+              const audioBuffer = Buffer.from(
+                chunk.result.audioContent,
+                "base64",
+              );
+              const pcmChunk = extractWavPayload(audioBuffer);
+              if (pcmChunk.length > 0) {
+                audioStream.push(pcmChunk);
+              }
             }
           } catch (e) {
             // If the error was thrown by us (chunk.error), rethrow it
-            if (e instanceof Error && e.message.startsWith("Inworld Stream Error")) {
+            if (
+              e instanceof Error &&
+              e.message.startsWith("Inworld Stream Error")
+            ) {
               throw e;
             }
-            // Otherwise log parse errors but continue if possible? 
+            // Otherwise log parse errors but continue if possible?
             // Better to fail if we can't parse reliable data
             console.warn("Error processing Inworld TTS chunk:", e);
           }
@@ -93,6 +130,9 @@ export class InworldTtsProvider implements TtsProvider {
       }
     })();
 
-    return { stream: audioStream, contentType: "audio/mpeg" };
+    return {
+      stream: audioStream,
+      contentType: "audio/raw;encoding=s16le;rate=48000;channels=1",
+    };
   }
 }

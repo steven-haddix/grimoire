@@ -20,17 +20,39 @@ export const DISCORD_PCM_FORMAT: TtsPcmFormat = {
   encoding: "s16le",
 };
 
+function getRawAudioParam(
+  contentType: string,
+  key: string,
+  fallback: number,
+): number {
+  const match = new RegExp(`${key}=([0-9]+)`, "i").exec(contentType);
+  return match ? Number.parseInt(match[1] ?? "", 10) : fallback;
+}
+
 export function normalizeToDiscordPcm(input: {
   stream: Readable;
   contentType: string;
   signal?: AbortSignal;
 }): Readable {
+  const isRawPcm = /^audio\/(?:raw|pcm)\b/i.test(input.contentType);
+  const inputArgs = isRawPcm
+    ? [
+        "-f",
+        DISCORD_PCM_FORMAT.encoding,
+        "-ar",
+        String(getRawAudioParam(input.contentType, "rate", 48000)),
+        "-ac",
+        String(getRawAudioParam(input.contentType, "channels", 1)),
+        "-i",
+        "pipe:0",
+      ]
+    : ["-i", "pipe:0"];
+
   const ff = spawn("ffmpeg", [
     "-hide_banner",
     "-loglevel",
     "error",
-    "-i",
-    "pipe:0",
+    ...inputArgs,
     "-f",
     "s16le",
     "-ar",
