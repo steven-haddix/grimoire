@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { format } from "date-fns";
+import { Calendar, Clock } from "lucide-react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Clock, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -63,7 +63,7 @@ export function SessionsList({
     selectedCampaignId === "all"
       ? sessions
       : sessions.filter(
-          (s) => s.campaignId === parseInt(selectedCampaignId, 10)
+          (s) => s.campaignId === parseInt(selectedCampaignId, 10),
         );
 
   const activeSessions = filteredSessions.filter((s) => s.status === "active");
@@ -81,7 +81,10 @@ export function SessionsList({
           </p>
         </div>
         {campaigns.length > 0 && (
-          <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+          <Select
+            value={selectedCampaignId}
+            onValueChange={setSelectedCampaignId}
+          >
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Filter by campaign" />
             </SelectTrigger>

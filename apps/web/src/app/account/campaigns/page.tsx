@@ -80,7 +80,9 @@ export default async function CampaignsPage(props: CampaignsPageProps) {
   const campaignsByGuild = new Map<string, typeof allCampaigns>();
 
   // Initialize for all guilds to show empty states if needed
-  guildIds.forEach((id) => campaignsByGuild.set(id, []));
+  for (const id of guildIds) {
+    campaignsByGuild.set(id, []);
+  }
 
   for (const campaign of allCampaigns) {
     campaignsByGuild.get(campaign.guildId)?.push(campaign);

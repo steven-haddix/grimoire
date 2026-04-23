@@ -74,7 +74,6 @@ const MEMORY_CATEGORIES = [
   "meta",
   "other",
 ] as const;
-type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
 const DEFAULT_CHAT_MESSAGE_LIMIT = 25;
 

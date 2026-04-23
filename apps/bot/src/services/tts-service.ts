@@ -23,11 +23,14 @@ export class TtsService {
   ): Promise<Readable> {
     // Treat req.voice.voice as the persona name
     const personaName = req.voice.voice;
-    const { provider: providerName, voiceConfig } = this.personaManager.resolvePersona(personaName);
-    
+    const { provider: providerName, voiceConfig } =
+      this.personaManager.resolvePersona(personaName);
+
     const provider = this.providers.get(providerName);
     if (!provider) {
-      throw new Error(`TTS Provider '${providerName}' not configured (requested by persona '${personaName}')`);
+      throw new Error(
+        `TTS Provider '${providerName}' not configured (requested by persona '${personaName}')`,
+      );
     }
 
     // Use the resolved configuration

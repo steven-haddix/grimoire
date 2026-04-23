@@ -1,7 +1,7 @@
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { campaigns, botGuilds } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { botGuilds, campaigns } from "@/db/schema";
 
 export async function POST(req: Request) {
   if (req.headers.get("x-bot-secret") !== process.env.BOT_SECRET) {
@@ -10,12 +10,18 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null);
   if (!body || !body.guildId || !body.name) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing required fields" },
+      { status: 400 },
+    );
   }
 
   // Find campaign by name and guild
   const campaign = await db.query.campaigns.findFirst({
-    where: and(eq(campaigns.guildId, body.guildId), eq(campaigns.name, body.name)),
+    where: and(
+      eq(campaigns.guildId, body.guildId),
+      eq(campaigns.name, body.name),
+    ),
   });
 
   if (!campaign) {

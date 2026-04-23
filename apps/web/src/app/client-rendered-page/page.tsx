@@ -16,7 +16,9 @@ export default function ClientRenderedPage() {
         </span>
       </p>
 
-      {session?.user && <p className="text-gray-400">User ID: {session.user.id}</p>}
+      {session?.user && (
+        <p className="text-gray-400">User ID: {session.user.id}</p>
+      )}
 
       <p className="font-medium text-gray-700 dark:text-gray-200">
         Session and User Data:

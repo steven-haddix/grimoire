@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { DiscordSignInButton } from "@/components/auth/discord-sign-in-button";
-import { authClient } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { authClient } from "@/lib/auth/client";
 
 export function HomeAuthControls() {
   const router = useRouter();
@@ -40,7 +40,8 @@ export function HomeAuthControls() {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3 text-sm shadow-sm">
       <div className="min-w-0 text-muted-foreground">
-        Signed in as <span className="font-semibold text-foreground">{label}</span>
+        Signed in as{" "}
+        <span className="font-semibold text-foreground">{label}</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" asChild className="bg-background/50">
@@ -48,7 +49,7 @@ export function HomeAuthControls() {
         </Button>
         <Button
           variant="default" // Using primary (ember) for sign out if desired, or secondary? Original was bg-ink (black/brown).
-          // Actually, let's use 'secondary' for sign out to be less aggressive than 'primary' (ember), 
+          // Actually, let's use 'secondary' for sign out to be less aggressive than 'primary' (ember),
           // or 'ghost'. The original was bg-ink, which is effectively "primary" in some themes, but our primary is Ember.
           // Let's stick to the theme: Primary = Action. Sign Out is an action.
           // But maybe we want it less prominent?

@@ -13,9 +13,7 @@ export default function AccountLayout({
             <SideNav />
           </div>
         </aside>
-        <main className="flex-1">
-          {children}
-        </main>
+        <main className="flex-1">{children}</main>
       </div>
     </div>
   );

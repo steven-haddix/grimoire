@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { InstallBotButton } from "@/components/install-bot-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -13,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { InstallBotButton } from "@/components/install-bot-button";
 
 interface Guild {
   id: string;

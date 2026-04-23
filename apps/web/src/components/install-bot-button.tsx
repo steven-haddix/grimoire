@@ -1,8 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { buildDiscordBotInstallUrl } from "@/lib/discord/installUrl";
-import { useEffect, useState } from "react";
 
 type InstallBotButtonProps = {
   guildId?: string;
@@ -27,7 +27,9 @@ export function InstallBotButton({ guildId }: InstallBotButtonProps) {
   const installUrl = buildDiscordBotInstallUrl({
     clientId: appId,
     guildId,
-    redirectUri: origin ? `${origin}/account/campaigns?installed=true` : undefined,
+    redirectUri: origin
+      ? `${origin}/account/campaigns?installed=true`
+      : undefined,
   });
 
   return (

@@ -1,8 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { authClient } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
+import { authClient } from "@/lib/auth/client";
 
 type DiscordSignInButtonProps = {
   callbackURL?: string;
@@ -13,7 +13,7 @@ type DiscordSignInButtonProps = {
 export function DiscordSignInButton({
   callbackURL = "/account",
   className,
-  children
+  children,
 }: DiscordSignInButtonProps) {
   return (
     <Button
@@ -23,7 +23,7 @@ export function DiscordSignInButton({
         await authClient.signIn.social({
           provider: "discord",
           callbackURL,
-          scopes: ["identify", "email", "guilds"]
+          scopes: ["identify", "email", "guilds"],
         });
       }}
     >

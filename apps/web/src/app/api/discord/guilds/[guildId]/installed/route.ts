@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth/server";
+import { headers } from "next/headers";
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { botGuilds } from "@/db/schema";
+import { auth } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 
