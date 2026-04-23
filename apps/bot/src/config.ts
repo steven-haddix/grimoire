@@ -8,9 +8,7 @@ export type BotConfig = {
   ttsVoiceOptions?: Record<string, unknown>;
 };
 
-function parseVoiceOptions(
-  raw?: string,
-): Record<string, unknown> | undefined {
+function parseVoiceOptions(raw?: string): Record<string, unknown> | undefined {
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw);
@@ -23,19 +21,21 @@ function parseVoiceOptions(
   return undefined;
 }
 
-export function loadConfig(
-  env: Record<string, string | undefined>,
-): BotConfig {
-  const missing: string[] = [];
-  if (!env.DISCORD_TOKEN) missing.push("DISCORD_TOKEN");
-  if (!env.NEXT_API_URL) missing.push("NEXT_API_URL");
-  if (!env.BOT_SECRET) missing.push("BOT_SECRET");
+export function loadConfig(env: Record<string, string | undefined>): BotConfig {
+  const discordToken = env.DISCORD_TOKEN;
+  const nextApiUrl = env.NEXT_API_URL;
+  const botSecret = env.BOT_SECRET;
 
-  if (missing.length) {
+  const missing: string[] = [];
+  if (!discordToken) missing.push("DISCORD_TOKEN");
+  if (!nextApiUrl) missing.push("NEXT_API_URL");
+  if (!botSecret) missing.push("BOT_SECRET");
+
+  if (missing.length || !discordToken || !nextApiUrl || !botSecret) {
     throw new Error(`Missing ${missing.join(", ")}`);
   }
 
-  const apiBase = env.NEXT_API_URL!.replace(/\/$/, "");
+  const apiBase = nextApiUrl.replace(/\/$/, "");
   const botServerPortRaw = env.BOT_HTTP_PORT ?? env.PORT ?? "3001";
   const botHttpPort = Number.parseInt(botServerPortRaw, 10);
 
@@ -50,10 +50,10 @@ export function loadConfig(
     env.DISCORD_APP_ID ?? env.DISCORD_APPLICATION_ID ?? env.DISCORD_CLIENT_ID;
 
   return {
-    discordToken: env.DISCORD_TOKEN!,
+    discordToken,
     discordAppId,
     apiBase,
-    botSecret: env.BOT_SECRET!,
+    botSecret,
     botHttpPort,
     ttsVoice,
     ttsVoiceOptions,

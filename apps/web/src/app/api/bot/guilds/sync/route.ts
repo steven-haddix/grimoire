@@ -21,8 +21,7 @@ function parseGuildSnapshot(value: unknown): GuildSnapshot | null {
     return null;
   }
 
-  const guildId =
-    typeof value.guildId === "string" ? value.guildId.trim() : "";
+  const guildId = typeof value.guildId === "string" ? value.guildId.trim() : "";
   if (!guildId) {
     return null;
   }

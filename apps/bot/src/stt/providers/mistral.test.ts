@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { MistralSttProvider } from "./mistral";
 import type { TranscriptionClientLike } from "./mistral";
+import { MistralSttProvider } from "./mistral";
 
 type DecoderEventName = "data" | "error";
 type EventListener = (...args: unknown[]) => void;

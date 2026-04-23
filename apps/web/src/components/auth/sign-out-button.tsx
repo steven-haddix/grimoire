@@ -1,9 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth/client";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { authClient } from "@/lib/auth/client";
 
 type SignOutButtonProps = {
   className?: string;

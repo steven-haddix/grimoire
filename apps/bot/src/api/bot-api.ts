@@ -41,7 +41,7 @@ export type BotApi = {
   startSession: (params: {
     guildId: string;
     channelId: string;
-  }) => Promise<number>;
+  }) => Promise<{ sessionId: number; resumed: boolean }>;
   ingestTranscript: (params: {
     sessionId: number;
     speaker: string;
@@ -149,8 +149,11 @@ export function createBotApi(config: BotConfig): BotApi {
         { guildId, channelId },
         "Session start",
       );
-      const data = (await res.json()) as { sessionId: number };
-      return data.sessionId;
+      const data = (await res.json()) as {
+        sessionId: number;
+        resumed?: boolean;
+      };
+      return { sessionId: data.sessionId, resumed: data.resumed ?? false };
     },
     ingestTranscript: async ({ sessionId, speaker, text, timestamp }) => {
       await postBotJson(

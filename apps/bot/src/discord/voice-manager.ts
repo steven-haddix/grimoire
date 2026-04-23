@@ -119,6 +119,36 @@ export function createVoiceManager(
     attachedReceivers.delete(guildId);
   };
 
+  const handleDisconnect = async (
+    connection: VoiceConnection,
+    guildId: string,
+  ) => {
+    try {
+      await Promise.race([
+        deps.entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+        deps.entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+      ]);
+      // Reconnecting (channel move / transient blip) — leave it alone.
+      return;
+    } catch {
+      // Unrecoverable: tear down local resources but leave the DB session
+      // 'active' so a follow-up /grim start resumes it.
+      console.warn(
+        `Voice connection for guild ${guildId} dropped; cleaning up without summarize.`,
+      );
+    }
+
+    try {
+      cleanupGuildConnection(guildId, connection);
+      await transcription.clearSession(guildId);
+    } catch (error) {
+      console.error(
+        `Error during voice disconnect cleanup for guild ${guildId}:`,
+        error,
+      );
+    }
+  };
+
   const attachReceiver = (connection: VoiceConnection, guildId: string) => {
     if (attachedReceivers.has(guildId)) return;
     attachedReceivers.add(guildId);
@@ -133,6 +163,14 @@ export function createVoiceManager(
         userId,
         stream,
       });
+    });
+
+    connection.on(VoiceConnectionStatus.Disconnected, () => {
+      void handleDisconnect(connection, guildId);
+    });
+
+    connection.on("error", (err) => {
+      console.error(`Voice connection error for guild ${guildId}:`, err);
     });
   };
 

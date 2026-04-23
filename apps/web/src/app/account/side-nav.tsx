@@ -1,9 +1,9 @@
 "use client";
 
+import { FileText, LayoutDashboard, Map as MapIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, FileText, Map } from "lucide-react";
 
 const items = [
   {
@@ -14,7 +14,7 @@ const items = [
   {
     title: "Campaigns",
     href: "/account/campaigns",
-    icon: Map,
+    icon: MapIcon,
   },
   {
     title: "Summaries",
@@ -38,7 +38,7 @@ export function SideNav() {
             href={item.href}
             className={cn(
               "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-              isActive ? "bg-accent text-accent-foreground" : "transparent"
+              isActive ? "bg-accent text-accent-foreground" : "transparent",
             )}
           >
             <Icon className="h-4 w-4" />

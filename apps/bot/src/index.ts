@@ -6,11 +6,11 @@ import { createCommandRouter } from "./discord/commands";
 import { registerDiscordEvents } from "./discord/events";
 import { registerSlashCommands } from "./discord/slash-commands";
 import { createVoiceManager } from "./discord/voice-manager";
+import { startBotHttpServer } from "./server/http";
 import { createBotController } from "./services/bot-controller";
 import { SttService } from "./services/stt-service";
 import { TranscriptionService } from "./services/transcription-service";
 import { TtsService } from "./services/tts-service";
-import { startBotHttpServer } from "./server/http";
 import { createSttProviderFromEnv } from "./stt";
 import { createAllTtsProvidersFromEnv } from "./tts";
 import { VoicePersonaManager } from "./tts/voice-personas";
@@ -42,9 +42,9 @@ const stt = new SttService(
 
 const personaManager = new VoicePersonaManager();
 const tts = new TtsService(personaManager);
-createAllTtsProvidersFromEnv(process.env).forEach((p) =>
-  tts.registerProvider(p),
-);
+for (const provider of createAllTtsProvidersFromEnv(process.env)) {
+  tts.registerProvider(provider);
+}
 
 const transcription = new TranscriptionService(
   stt,

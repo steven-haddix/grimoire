@@ -24,12 +24,16 @@ export function ExpandableDescription({
     <div className="space-y-1">
       <p
         className="text-muted-foreground text-lg"
-        style={!isExpanded ? {
-          display: "-webkit-box",
-          WebkitLineClamp: lineClamp,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden"
-        } : undefined}
+        style={
+          !isExpanded
+            ? {
+                display: "-webkit-box",
+                WebkitLineClamp: lineClamp,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }
+            : undefined
+        }
       >
         {description}
       </p>

@@ -34,7 +34,9 @@ export const botGuilds = pgTable("bot_guilds", {
   guildId: text("guild_id").primaryKey(),
   name: text("name").notNull(),
   icon: text("icon"),
-  activeCampaignId: integer("active_campaign_id").references(() => campaigns.id),
+  activeCampaignId: integer("active_campaign_id").references(
+    () => campaigns.id,
+  ),
   installed: boolean("installed").notNull().default(true),
   installedAt: timestamp("installed_at", { withTimezone: true })
     .notNull()

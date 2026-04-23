@@ -1,7 +1,7 @@
+import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { campaigns, botGuilds } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { botGuilds, campaigns } from "@/db/schema";
 
 export async function GET(req: Request) {
   if (req.headers.get("x-bot-secret") !== process.env.BOT_SECRET) {
@@ -38,7 +38,10 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null);
   if (!body || !body.guildId || !body.name) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing required fields" },
+      { status: 400 },
+    );
   }
 
   const [newCampaign] = await db
@@ -51,7 +54,10 @@ export async function POST(req: Request) {
     .returning();
 
   if (!newCampaign) {
-    return NextResponse.json({ error: "Failed to create campaign" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create campaign" },
+      { status: 500 },
+    );
   }
 
   // If no active campaign, set this one?

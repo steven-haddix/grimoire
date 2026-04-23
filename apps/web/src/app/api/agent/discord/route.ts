@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { runDiscordAgent, type DiscordAgentInput } from "@/lib/agents/discord-agent";
+import {
+  type DiscordAgentInput,
+  runDiscordAgent,
+} from "@/lib/agents/discord-agent";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -15,7 +18,9 @@ function parseDiscordAgentPayload(value: unknown): DiscordAgentInput | null {
   const userName =
     typeof value.userName === "string" ? value.userName.trim() : "";
   const userDisplayName =
-    typeof value.userDisplayName === "string" ? value.userDisplayName.trim() : "";
+    typeof value.userDisplayName === "string"
+      ? value.userDisplayName.trim()
+      : "";
   const message = typeof value.message === "string" ? value.message.trim() : "";
 
   if (!guildId || !channelId || !userId || !userName) return null;
@@ -38,7 +43,10 @@ export async function POST(req: Request) {
   const payload = parseDiscordAgentPayload(await req.json().catch(() => null));
 
   if (!payload) {
-    return NextResponse.json({ error: "Missing agent payload" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing agent payload" },
+      { status: 400 },
+    );
   }
 
   const result = await runDiscordAgent(payload);

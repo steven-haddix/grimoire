@@ -1,5 +1,5 @@
-import { RedisCache } from './providers/redis';
-import type { CacheService } from './types';
+import { RedisCache } from "./providers/redis";
+import type { CacheService } from "./types";
 
 const cache: CacheService = new RedisCache();
 

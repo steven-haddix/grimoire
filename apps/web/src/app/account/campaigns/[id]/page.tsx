@@ -7,7 +7,6 @@ import { notFound, redirect } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CampaignActions } from "@/components/campaign-actions";
-import { ExpandableDescription } from "./expandable-description";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +20,7 @@ import { db } from "@/db";
 import { botGuilds, campaigns, sessions, summaries } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
+import { ExpandableDescription } from "./expandable-description";
 
 interface CampaignPageProps {
   params: Promise<{ id: string }>;
