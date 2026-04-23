@@ -1,7 +1,9 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { botGuilds, sessions } from "@/db/schema";
+
+const RESUME_STALENESS_HOURS = 6;
 
 type SessionStartPayload = {
   guildId: string;
@@ -45,6 +47,26 @@ export async function POST(req: Request) {
     );
   }
 
+  const staleCutoff = new Date(
+    Date.now() - RESUME_STALENESS_HOURS * 60 * 60 * 1000,
+  );
+
+  const existing = await db.query.sessions.findFirst({
+    where: and(
+      eq(sessions.guildId, payload.guildId),
+      eq(sessions.channelId, payload.channelId),
+      eq(sessions.status, "active"),
+      isNull(sessions.endedAt),
+      gt(sessions.startedAt, staleCutoff),
+    ),
+    orderBy: desc(sessions.startedAt),
+    columns: { id: true },
+  });
+
+  if (existing) {
+    return NextResponse.json({ sessionId: existing.id, resumed: true });
+  }
+
   const guildData = await db.query.botGuilds.findFirst({
     where: eq(botGuilds.guildId, payload.guildId),
     columns: { activeCampaignId: true },
@@ -60,5 +82,5 @@ export async function POST(req: Request) {
     })
     .returning();
 
-  return NextResponse.json({ sessionId: newSession?.id });
+  return NextResponse.json({ sessionId: newSession?.id, resumed: false });
 }

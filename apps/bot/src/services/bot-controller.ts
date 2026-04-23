@@ -51,7 +51,7 @@ export function createBotController(params: {
     }
 
     try {
-      const sessionId = await api.startSession({
+      const { sessionId, resumed } = await api.startSession({
         guildId: ctx.guildId,
         channelId: ctx.voiceChannelId,
       });
@@ -59,7 +59,9 @@ export function createBotController(params: {
       transcription.setSessionId(ctx.guildId, sessionId);
 
       await ctx.reply(
-        `📜 **Session #${sessionId} Started.** I am listening...`,
+        resumed
+          ? `📜 **Resumed Session #${sessionId}.** Picking up where we left off...`
+          : `📜 **Session #${sessionId} Started.** I am listening...`,
       );
     } catch (error) {
       console.error(error);
