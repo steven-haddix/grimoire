@@ -1,0 +1,70 @@
+"use server";
+
+import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { db } from "@/db";
+import { campaigns, memories } from "@/db/schema";
+import { auth } from "@/lib/auth/server";
+import { getUserAdminGuilds } from "@/lib/discord/server";
+
+const MEMORY_CATEGORIES = ["lore", "character", "rule", "meta", "other"] as const;
+type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+
+async function assertCampaignAccess(campaignId: number) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) throw new Error("Unauthorized");
+
+  const campaign = await db.query.campaigns.findFirst({
+    where: eq(campaigns.id, campaignId),
+  });
+  if (!campaign) throw new Error("Campaign not found");
+
+  const adminGuilds = await getUserAdminGuilds();
+  if (!adminGuilds.some((g) => g.id === campaign.guildId)) {
+    throw new Error("Forbidden");
+  }
+  return campaign;
+}
+
+export async function createMemory(formData: FormData) {
+  const campaignId = Number(formData.get("campaignId"));
+  if (!Number.isFinite(campaignId)) throw new Error("Invalid campaign");
+
+  const content = String(formData.get("content") ?? "").trim();
+  const categoryRaw = String(formData.get("category") ?? "other").trim();
+  const source = String(formData.get("source") ?? "").trim();
+
+  if (!content) throw new Error("Memory content required");
+
+  const category: MemoryCategory = (
+    MEMORY_CATEGORIES as readonly string[]
+  ).includes(categoryRaw)
+    ? (categoryRaw as MemoryCategory)
+    : "other";
+
+  const campaign = await assertCampaignAccess(campaignId);
+
+  await db.insert(memories).values({
+    campaignId,
+    content,
+    category,
+    source: source || null,
+  });
+
+  revalidatePath(
+    `/account/s/${campaign.guildId}/campaigns/${campaignId}/memories`,
+  );
+  revalidatePath(`/account/s/${campaign.guildId}/campaigns/${campaignId}`);
+}
+
+export async function deleteMemory(memoryId: number, campaignId: number) {
+  const campaign = await assertCampaignAccess(campaignId);
+  await db
+    .delete(memories)
+    .where(and(eq(memories.id, memoryId), eq(memories.campaignId, campaignId)));
+  revalidatePath(
+    `/account/s/${campaign.guildId}/campaigns/${campaignId}/memories`,
+  );
+  revalidatePath(`/account/s/${campaign.guildId}/campaigns/${campaignId}`);
+}

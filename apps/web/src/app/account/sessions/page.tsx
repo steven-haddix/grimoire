@@ -1,8 +1,7 @@
 import { desc, inArray } from "drizzle-orm";
-import { AlertCircle } from "lucide-react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
+import { Topbar } from "@/components/grimoire/primitives";
 import { db } from "@/db";
 import { campaigns, sessions, summaries } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
@@ -19,12 +18,34 @@ export default async function SessionsPage() {
 
   if (guildIds.length === 0) {
     return (
-      <Card className="w-full bg-card/80">
-        <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <AlertCircle className="h-10 w-10 mb-4 opacity-50" />
-          <p>No servers found where you are an administrator.</p>
-        </CardContent>
-      </Card>
+      <>
+        <Topbar
+          crumbs={[
+            { label: "GRIMOIRE", href: "/account" },
+            { label: "Sessions" },
+          ]}
+        />
+        <div className="page" style={{ maxWidth: 1100 }}>
+          <div
+            style={{
+              border: "0.5px dashed var(--rule)",
+              padding: "60px 32px",
+              textAlign: "center",
+              background: "var(--ink-2)",
+            }}
+          >
+            <h2
+              className="t-display"
+              style={{ fontSize: 32, marginBottom: 12 }}
+            >
+              No servers
+            </h2>
+            <p className="t-meta">
+              No servers found where you are an administrator.
+            </p>
+          </div>
+        </div>
+      </>
     );
   }
 
@@ -63,11 +84,21 @@ export default async function SessionsPage() {
   }
 
   return (
-    <SessionsList
-      sessions={userSessions}
-      campaigns={userCampaigns}
-      summariesBySession={summariesBySession}
-      guildMap={guildMap}
-    />
+    <>
+      <Topbar
+        crumbs={[
+          { label: "GRIMOIRE", href: "/account" },
+          { label: "Sessions" },
+        ]}
+      />
+      <div className="page" style={{ maxWidth: 1100 }}>
+        <SessionsList
+          sessions={userSessions}
+          campaigns={userCampaigns}
+          summariesBySession={summariesBySession}
+          guildMap={guildMap}
+        />
+      </div>
+    </>
   );
 }

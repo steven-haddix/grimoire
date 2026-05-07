@@ -1,5 +1,5 @@
 import { google } from "@ai-sdk/google";
-import { generateText, stepCountIs, ToolLoopAgent, tool } from "ai";
+import { stepCountIs, ToolLoopAgent, tool } from "ai";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -7,12 +7,14 @@ import {
   botGuilds,
   campaigns,
   chatMessages,
+  illustrations,
   memories,
   sessions,
   summaries,
   transcripts,
 } from "@/db/schema";
 import { cache } from "@/lib/cache";
+import { generateIllustration } from "@/lib/agents/image-providers";
 
 export type DiscordAgentInput = {
   guildId: string;
@@ -390,25 +392,52 @@ function createDiscordAgent(params: {
                     `Scene: ${sceneDescription}`,
                   ].join("\n");
 
-                  const result = await generateText({
-                    model: "google/gemini-3-pro-image",
-                    prompt,
-                  });
+                  const image = await generateIllustration(prompt);
 
-                  const imageFile = result.files?.[0];
-                  if (!imageFile || !imageFile.base64) {
-                    return { ok: false, error: "No image was generated" };
-                  }
-
-                  // Increment daily usage counter
                   const key = illustrateCacheKey(input.guildId);
                   const current = (await cache.get<number>(key)) ?? 0;
                   await cache.set(key, current + 1, ILLUSTRATE_TTL_SECONDS);
 
+                  // Persist to the campaign gallery if there's an active
+                  // campaign for this guild. Best-effort — never fail the
+                  // tool because of a write.
+                  if (activeCampaignId) {
+                    try {
+                      const activeSession =
+                        await db.query.sessions.findFirst({
+                          where: eq(sessions.campaignId, activeCampaignId),
+                          orderBy: desc(sessions.startedAt),
+                        });
+                      const buffer = Buffer.from(image.base64, "base64");
+                      const captionTrim =
+                        sceneDescription.length > 80
+                          ? `${sceneDescription.slice(0, 80)}…`
+                          : sceneDescription;
+                      await db.insert(illustrations).values({
+                        campaignId: activeCampaignId,
+                        sessionId:
+                          activeSession?.status === "active"
+                            ? activeSession.id
+                            : (activeSession?.id ?? null),
+                        prompt,
+                        userPrompt: sceneDescription,
+                        caption: captionTrim,
+                        mimeType: image.mimeType,
+                        data: buffer,
+                        source: "discord-agent",
+                      });
+                    } catch (persistError) {
+                      console.error(
+                        "Failed to persist agent-generated illustration",
+                        persistError,
+                      );
+                    }
+                  }
+
                   actions.push({
                     type: "image",
-                    base64: imageFile.base64,
-                    mimeType: imageFile.mediaType,
+                    base64: image.base64,
+                    mimeType: image.mimeType,
                     caption: sceneDescription,
                   });
 

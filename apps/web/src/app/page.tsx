@@ -1,256 +1,615 @@
-import { Bot, Command, Mic, ScrollText, Sparkles } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { HomeAuthControls } from "@/components/home-auth-controls";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Asterism,
+  Compass,
+  Diamond,
+  Quill,
+  Rosette,
+} from "@/components/grimoire/marks";
+import { CornerMarks, GridUnderlay } from "@/components/grimoire/primitives";
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/20">
-      {/* Decorative Background Elements */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[100px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-secondary/20 blur-[100px] rounded-full" />
-      </div>
+    <main style={{ position: "relative", minHeight: "100vh" }}>
+      <GridUnderlay />
+      <CornerMarks />
 
-      <div className="relative z-10 max-w-6xl mx-auto px-6 py-12 md:py-24 space-y-24">
-        {/* Hero Section */}
-        <section className="flex flex-col-reverse lg:flex-row items-center gap-12 lg:gap-16">
-          {/* Left Content */}
-          <div className="flex flex-col space-y-8 lg:flex-1">
-            <Badge
-              variant="outline"
-              className="px-4 py-1 border-primary/30 text-primary bg-primary/5 uppercase tracking-widest text-xs font-semibold rounded-full w-fit"
+      {/* Top brand strip */}
+      <header
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "24px 40px",
+          borderBottom: "0.5px solid var(--rule-soft)",
+          maxWidth: 1280,
+          margin: "0 auto",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span
+            style={{
+              width: 28,
+              height: 28,
+              border: "0.5px solid var(--copper-dim)",
+              display: "grid",
+              placeItems: "center",
+              color: "var(--copper)",
+              fontFamily: "var(--serif)",
+              fontSize: 14,
+              fontStyle: "italic",
+              fontVariationSettings: '"opsz" 144',
+            }}
+          >
+            G
+          </span>
+          <span
+            className="t-display"
+            style={{ fontSize: 22, fontWeight: 500 }}
+          >
+            Grimoire
+          </span>
+        </div>
+        <nav
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 28,
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            color: "var(--bone-dim)",
+          }}
+          className="hidden md:flex"
+        >
+          <a href="#how-it-works" style={{ textDecoration: "none", color: "inherit" }}>
+            how it works
+          </a>
+          <a href="#features" style={{ textDecoration: "none", color: "inherit" }}>
+            features
+          </a>
+          <Link
+            href="/auth/sign-in"
+            style={{ textDecoration: "none", color: "inherit" }}
+          >
+            sign in
+          </Link>
+        </nav>
+      </header>
+
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 1280,
+          margin: "0 auto",
+          padding: "80px 40px 120px",
+        }}
+      >
+        {/* HERO */}
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1fr)",
+            gap: 80,
+            alignItems: "center",
+            marginBottom: 140,
+          }}
+          className="hero-grid"
+        >
+          <div>
+            <div
+              className="t-eyebrow"
+              style={{ marginBottom: 18 }}
             >
-              The Ultimate Dungeon Master's Assistant
-            </Badge>
-
-            <h1 className="text-5xl md:text-6xl font-heading font-bold text-foreground leading-tight">
-              Never Take{" "}
-              <span className="text-primary italic">Session Notes</span> Again
+              FOLIO 001 · A SCRIBE FOR YOUR TABLE
+            </div>
+            <h1
+              className="t-display"
+              style={{
+                fontSize: "clamp(56px, 8vw, 104px)",
+                marginBottom: 28,
+              }}
+            >
+              Every session,
+              <br />
+              <em>remembered.</em>
             </h1>
-
-            <p className="text-xl text-muted-foreground leading-relaxed">
-              Grimoire listens to your Discord voice channel, transcribes the
-              roleplay, and magically generates structured summaries, loot
-              lists, and NPC logs.
+            <p
+              style={{
+                color: "var(--bone-dim)",
+                fontSize: 18,
+                lineHeight: 1.6,
+                marginBottom: 36,
+                maxWidth: 540,
+              }}
+            >
+              Grimoire listens to your Discord voice channel, transcribes every
+              roll and revelation, and writes a structured chronicle for the
+              campaign — searchable, editable, and remembered between sessions.
             </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
+                flexWrap: "wrap",
+              }}
+            >
               <HomeAuthControls />
+              <Link
+                href="#how-it-works"
+                className="t-meta t-meta--lit"
+                style={{ textDecoration: "none" }}
+              >
+                see how it works ↓
+              </Link>
+            </div>
+
+            <div
+              style={{
+                marginTop: 56,
+                display: "flex",
+                gap: 24,
+                flexWrap: "wrap",
+                color: "var(--bone-mute)",
+              }}
+            >
+              <span className="t-meta">slash-command driven</span>
+              <span className="t-meta">·</span>
+              <span className="t-meta">per-server scoped</span>
+              <span className="t-meta">·</span>
+              <span className="t-meta">markdown summaries</span>
             </div>
           </div>
 
-          {/* Right Visual */}
-          <div className="flex lg:flex-1 w-full justify-center align-middle group cursor-default">
-            <div className="w-56 h-56 sm:w-64 sm:h-64 md:w-96 md:h-92 rounded-2xl ">
-              <Image
-                src="/logo_dark.png"
-                alt="Grimoire logo"
-                className="w-full h-full object-contain dark:hidden"
-                width={368}
-                height={368}
-              />
-              <Image
-                src="/logo.png"
-                alt="Grimoire logo"
-                className="w-full h-full object-contain dark:block hidden"
-                width={368}
-                height={368}
-              />
+          <div
+            style={{
+              position: "relative",
+              display: "grid",
+              placeItems: "center",
+              minHeight: 360,
+            }}
+          >
+            <div style={{ position: "relative", color: "var(--copper)" }}>
+              <Rosette size={420} />
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "grid",
+                placeItems: "center",
+                color: "var(--bone-dim)",
+              }}
+            >
+              <Compass size={140} />
             </div>
           </div>
         </section>
 
-        {/* Session Output */}
-        <section className="space-y-6">
-          <div className="text-center space-y-3">
-            <h2 className="text-3xl md:text-4xl font-heading font-semibold">
-              Your Session, Captured
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              Grimoire preserves the full transcript with timestamps and
-              speakers so you can revisit every scene.
-            </p>
-          </div>
-          <div className="relative aspect-video rounded-xl overflow-hidden shadow-lg border">
-            <Image
-              src="/grimoire_vp_sessions.png"
-              alt="Recorded session output with transcripts and timestamps"
-              className="w-full h-full object-cover"
-              sizes="(max-width: 768px) 100vw, 75vw"
-              width={1200}
-              height={675}
+        {/* HOW IT WORKS */}
+        <section
+          id="how-it-works"
+          style={{ marginBottom: 140, scrollMarginTop: 80 }}
+        >
+          <header
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              marginBottom: 48,
+              gap: 24,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div className="t-eyebrow">II · the workflow</div>
+              <h2
+                className="t-display"
+                style={{ fontSize: "clamp(40px, 5vw, 64px)", marginTop: 12 }}
+              >
+                Three commands
+                <br />
+                <em>that's all.</em>
+              </h2>
+            </div>
+            <Asterism size={20} className="opacity-60" />
+          </header>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: 1,
+              background: "var(--rule-soft)",
+              border: "0.5px solid var(--rule)",
+            }}
+          >
+            <Step
+              n="01"
+              command="/grim start"
+              title="Summon the scribe"
+              body="Invite the bot into your voice channel. It listens in the background, distinguishing speakers and capturing every roll, joke, and plot beat in real time."
+            />
+            <Step
+              n="02"
+              command="/grim stop"
+              title="Close the book"
+              body="When the session ends, Grimoire stops recording, processes the transcript, and weaves a structured summary you can read on the web — or hand back to your players."
+            />
+            <Step
+              n="03"
+              command="/grim recap"
+              title="The recap ritual"
+              body="Begin the next session with an AI-narrated recap, played back in voice. Everyone arrives caught up, and the chronicle continues."
             />
           </div>
         </section>
 
-        {/* How It Works / Walkthrough */}
-        <section className="space-y-10">
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-heading font-semibold">
-              How It Works
+        {/* FEATURES */}
+        <section
+          id="features"
+          style={{ marginBottom: 100, scrollMarginTop: 80 }}
+        >
+          <header style={{ marginBottom: 48 }}>
+            <div className="t-eyebrow">III · what it does</div>
+            <h2
+              className="t-display"
+              style={{ fontSize: "clamp(40px, 5vw, 64px)", marginTop: 12 }}
+            >
+              Knowledge,
+              <br />
+              <em>kept.</em>
             </h2>
-            <p className="text-lg text-muted-foreground">
-              Three simple steps to eternalize your campaign.
-            </p>
-          </div>
+          </header>
 
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            {/* Step 1: Record */}
-            <div className="order-2 md:order-1 space-y-6">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary mb-4">
-                <Mic className="w-6 h-6" />
-              </div>
-              <h3 className="text-2xl font-bold font-heading">
-                1. Record the Session
-              </h3>
-              <p className="text-muted-foreground text-lg leading-relaxed">
-                Summon the bot to your voice channel. It listens in the
-                background, distinguishing between players and capturing every
-                roll, joke, and plot twist in real-time.
-              </p>
-              <div className="bg-card border border-border rounded-md p-4 font-mono text-sm shadow-sm">
-                <span className="text-primary">/grim</span>{" "}
-                <span className="text-foreground">start</span>
-              </div>
-            </div>
-            <div className="order-1 md:order-2 relative aspect-video bg-card/50 border border-border/60 rounded-xl overflow-hidden shadow-lg">
-              <Image
-                src="/grimoire_vp_start_scribe.png"
-                alt="Discord UI showing /grim start command"
-                className="w-full h-full object-cover"
-                sizes="(max-width: 768px) 100vw, 75vw"
-                width={1200}
-                height={675}
-              />
-            </div>
-
-            {/* Step 2: Stop & Summarize */}
-            <div className="order-3 md:order-3 relative aspect-video bg-card/50 border border-border/60 rounded-xl overflow-hidden shadow-lg">
-              <Image
-                src="/grimoire_vp_stop_scribe.png"
-                alt="Grimoire bot showing session ended and summarizing"
-                className="w-full h-full object-cover"
-                sizes="(max-width: 768px) 100vw, 75vw"
-                width={1200}
-                height={675}
-              />
-            </div>
-            <div className="order-4 md:order-4 space-y-6">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary mb-4">
-                <ScrollText className="w-6 h-6" />
-              </div>
-              <h3 className="text-2xl font-bold font-heading">
-                2. Stop & Summarize
-              </h3>
-              <p className="text-muted-foreground text-lg leading-relaxed">
-                When the session ends, simply stop the bot. Grimoire instantly
-                processes the transcript and weaves a structured summary,
-                capturing key plot beats and loot.
-              </p>
-              <div className="bg-card border border-border rounded-md p-4 font-mono text-sm shadow-sm">
-                <span className="text-primary">/grim</span>{" "}
-                <span className="text-foreground">stop</span>
-              </div>
-            </div>
-
-            {/* Step 3: Recap */}
-            <div className="order-6 md:order-5 space-y-6">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary mb-4">
-                <Sparkles className="w-6 h-6" />
-              </div>
-              <h3 className="text-2xl font-bold font-heading">
-                3. The Recap Ritual
-              </h3>
-              <p className="text-muted-foreground text-lg leading-relaxed">
-                Start your next session with a dramatic, AI-narrated recap of
-                the previous adventure, played directly into the voice channel
-                to get everyone back in the zone.
-              </p>
-              <div className="bg-card border border-border rounded-md p-4 font-mono text-sm shadow-sm">
-                <span className="text-primary">/grim</span>{" "}
-                <span className="text-foreground">recap</span>
-              </div>
-            </div>
-            <div className="order-5 md:order-6 relative aspect-video bg-card/50 border border-border/60 rounded-xl overflow-hidden shadow-lg">
-              <Image
-                src="/grimoire_vp_commands.png"
-                alt="Discord showing grim slash commands"
-                className="w-full h-full object-cover"
-                sizes="(max-width: 768px) 100vw, 75vw"
-                width={1200}
-                height={675}
-              />
-            </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: 1,
+              background: "var(--rule-soft)",
+              border: "0.5px solid var(--rule)",
+            }}
+          >
+            <Feature
+              icon={<Quill size={28} />}
+              title="Live transcription"
+              body="Per-speaker, timestamped, searchable. Deepgram nova-3 in your voice channel."
+            />
+            <Feature
+              icon={<Compass size={28} />}
+              title="Structured summaries"
+              body="Markdown summaries with headings, threads, NPCs, and loot — generated when the session ends."
+            />
+            <Feature
+              icon={<Rosette size={28} />}
+              title="The campaign brain"
+              body="Long-lived memories the agent draws on whenever someone @-mentions it in chat or voice."
+            />
+            <Feature
+              icon={<Diamond size={20} />}
+              title="In-voice recall"
+              body="Ask the scribe in voice — “what was the innkeeper wearing?” — and hear the answer back, in character if you like."
+            />
           </div>
         </section>
 
-        {/* Features / Details */}
-        <section className="py-12 space-y-8">
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-heading font-semibold">
-              Your Knowledge
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              Knowledge is power, and Grimoire is packed with features to
-              empower
-            </p>
+        {/* CTA */}
+        <section
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            padding: "60px 32px",
+            border: "0.5px solid var(--rule)",
+            background: "var(--ink-2)",
+            position: "relative",
+          }}
+        >
+          <span className="corner-tl" aria-hidden style={cornerStyle("tl")} />
+          <span className="corner-tr" aria-hidden style={cornerStyle("tr")} />
+          <span className="corner-bl" aria-hidden style={cornerStyle("bl")} />
+          <span className="corner-br" aria-hidden style={cornerStyle("br")} />
+          <div className="t-eyebrow" style={{ marginBottom: 14 }}>
+            INVITE THE SCRIBE
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card className="bg-card/50 border-border/50 shadow-sm hover:border-primary/30 transition-colors">
-              <CardContent className="pt-6 space-y-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                  <Bot className="w-5 h-5" />
-                </div>
-                <h4 className="font-heading font-semibold text-lg">
-                  Ask the Grimoire
-                </h4>
-                <p className="text-sm text-muted-foreground">
-                  Forgot who that NPC was? Just ask the bot. It uses your
-                  campaign's history to answer Q&A and recall facts instantly.
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card/50 border-border/50 shadow-sm hover:border-primary/30 transition-colors">
-              <CardContent className="pt-6 space-y-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                  <Command className="w-5 h-5" />
-                </div>
-                <h4 className="font-heading font-semibold text-lg">
-                  Slash Commands
-                </h4>
-                <p className="text-sm text-muted-foreground">
-                  Simple, intuitive discord commands. No complex configuration
-                  or dashboard tweaking required to start.
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card/50 border-border/50 shadow-sm hover:border-primary/30 transition-colors">
-              <CardContent className="pt-6 space-y-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                  <ScrollText className="w-5 h-5" />
-                </div>
-                <h4 className="font-heading font-semibold text-lg">
-                  Lore Archive
-                </h4>
-                <p className="text-sm text-muted-foreground">
-                  Every session is saved, indexed, and searchable. Build a
-                  living history of your campaign automatically.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <h2
+            className="t-display"
+            style={{
+              fontSize: "clamp(36px, 5vw, 56px)",
+              maxWidth: 720,
+              marginBottom: 18,
+            }}
+          >
+            Bring Grimoire to <em>your table.</em>
+          </h2>
+          <p
+            style={{
+              color: "var(--bone-dim)",
+              maxWidth: 540,
+              marginBottom: 32,
+            }}
+          >
+            Sign in with Discord and install the bot in any server you
+            administer. Each campaign gets its own chronicle.
+          </p>
+          <HomeAuthControls />
         </section>
 
-        {/* Footer */}
-        <footer className="border-t border-border pt-8 pb-12 text-center space-y-6">
-          <div className="flex items-center justify-center">
-            <ThemeToggle />
-          </div>
-        </footer>
+        {/* Optional product images preserved */}
+        <section
+          style={{
+            marginTop: 100,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 32,
+          }}
+          className="screenshots-grid"
+        >
+          <Screenshot
+            src="/grimoire_vp_sessions.png"
+            alt="Recorded session output"
+            label="Session recording"
+          />
+          <Screenshot
+            src="/grimoire_vp_start_scribe.png"
+            alt="/grim start command"
+            label="/grim start"
+          />
+        </section>
       </div>
+
+      {/* Foot */}
+      <footer
+        style={{
+          position: "relative",
+          zIndex: 1,
+          borderTop: "0.5px solid var(--rule-soft)",
+          padding: "32px 40px",
+          maxWidth: 1280,
+          margin: "0 auto",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 16,
+        }}
+      >
+        <span
+          className="t-meta"
+          style={{ letterSpacing: "0.30em" }}
+        >
+          GRIMOIRE · 2026
+        </span>
+        <span className="t-meta">FOLIO 001 · INTROIT</span>
+        <Link
+          href="/auth/sign-in"
+          className="t-meta t-meta--lit"
+          style={{ textDecoration: "none" }}
+        >
+          enter →
+        </Link>
+      </footer>
     </main>
   );
+}
+
+function Step({
+  n,
+  command,
+  title,
+  body,
+}: {
+  n: string;
+  command: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "var(--ink)",
+        padding: "36px 32px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 18,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--mono)",
+            color: "var(--copper)",
+            fontSize: 13,
+            letterSpacing: "0.16em",
+          }}
+        >
+          {n}
+        </span>
+        <code
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            color: "var(--bone-dim)",
+            border: "0.5px solid var(--rule)",
+            padding: "3px 8px",
+          }}
+        >
+          {command}
+        </code>
+      </div>
+      <h3
+        style={{
+          fontFamily: "var(--serif)",
+          fontSize: 28,
+          fontWeight: 500,
+          margin: 0,
+          color: "var(--bone)",
+          fontVariationSettings: '"opsz" 144',
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {title}
+      </h3>
+      <p
+        style={{
+          color: "var(--bone-dim)",
+          margin: 0,
+          fontSize: 14.5,
+          lineHeight: 1.6,
+        }}
+      >
+        {body}
+      </p>
+    </div>
+  );
+}
+
+function Feature({
+  icon,
+  title,
+  body,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "var(--ink)",
+        padding: "32px 28px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+      }}
+    >
+      <span
+        style={{
+          color: "var(--copper)",
+          width: 36,
+          height: 36,
+          display: "grid",
+          placeItems: "center",
+          border: "0.5px solid var(--copper-dim)",
+        }}
+      >
+        {icon}
+      </span>
+      <h3
+        style={{
+          fontFamily: "var(--serif)",
+          fontSize: 22,
+          fontWeight: 500,
+          margin: 0,
+          color: "var(--bone)",
+          fontVariationSettings: '"opsz" 144',
+          letterSpacing: "-0.005em",
+        }}
+      >
+        {title}
+      </h3>
+      <p
+        style={{
+          color: "var(--bone-dim)",
+          margin: 0,
+          fontSize: 14,
+          lineHeight: 1.55,
+        }}
+      >
+        {body}
+      </p>
+    </div>
+  );
+}
+
+function Screenshot({
+  src,
+  alt,
+  label,
+}: {
+  src: string;
+  alt: string;
+  label: string;
+}) {
+  return (
+    <figure
+      style={{
+        margin: 0,
+        border: "0.5px solid var(--rule)",
+        background: "var(--ink-2)",
+        padding: 14,
+        position: "relative",
+      }}
+    >
+      <span className="corner-tl" aria-hidden style={cornerStyle("tl")} />
+      <span className="corner-tr" aria-hidden style={cornerStyle("tr")} />
+      <span className="corner-bl" aria-hidden style={cornerStyle("bl")} />
+      <span className="corner-br" aria-hidden style={cornerStyle("br")} />
+      <div
+        style={{
+          position: "relative",
+          aspectRatio: "16 / 9",
+          width: "100%",
+          overflow: "hidden",
+          background: "var(--ink)",
+        }}
+      >
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          style={{ objectFit: "cover" }}
+        />
+      </div>
+      <figcaption className="t-meta" style={{ marginTop: 12 }}>
+        {label}
+      </figcaption>
+    </figure>
+  );
+}
+
+function cornerStyle(corner: "tl" | "tr" | "bl" | "br"): React.CSSProperties {
+  return {
+    position: "absolute",
+    width: 8,
+    height: 8,
+    borderColor: "var(--copper)",
+    borderStyle: "solid",
+    borderWidth: 0,
+    ...(corner === "tl"
+      ? { top: -1, left: -1, borderTopWidth: 0.5, borderLeftWidth: 0.5 }
+      : corner === "tr"
+        ? { top: -1, right: -1, borderTopWidth: 0.5, borderRightWidth: 0.5 }
+        : corner === "bl"
+          ? {
+              bottom: -1,
+              left: -1,
+              borderBottomWidth: 0.5,
+              borderLeftWidth: 0.5,
+            }
+          : {
+              bottom: -1,
+              right: -1,
+              borderBottomWidth: 0.5,
+              borderRightWidth: 0.5,
+            }),
+  };
 }

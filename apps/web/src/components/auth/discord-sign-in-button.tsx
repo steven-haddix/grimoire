@@ -18,6 +18,8 @@ export function DiscordSignInButton({
   return (
     <Button
       type="button"
+      variant="primary"
+      size="lg"
       className={className}
       onClick={async () => {
         await authClient.signIn.social({

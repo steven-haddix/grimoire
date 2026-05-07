@@ -1,77 +1,293 @@
+import { and, count, eq, inArray } from "drizzle-orm";
+import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { SignOutButton } from "@/components/auth/sign-out-button";
-import { DiscordGuildSelector } from "@/components/discord-guild-selector";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { db } from "@/db";
+import { botGuilds, campaigns, sessions } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
+import { getUserAdminGuilds } from "@/lib/discord/server";
+import { Diamond, Tick } from "@/components/grimoire/marks";
+import { Pulse, Topbar } from "@/components/grimoire/primitives";
+import { InstallBotButton } from "@/components/install-bot-button";
+import { Badge } from "@/components/ui/badge";
 
-export default async function AccountPage() {
+export default async function AccountHome() {
   const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/auth/sign-in");
 
-  if (!session) {
-    redirect("/auth/sign-in");
+  const userGuilds = await getUserAdminGuilds();
+  const guildIds = userGuilds.map((g) => g.id);
+
+  // Auto-redirect single-guild users straight into their server scope.
+  if (userGuilds.length === 1) {
+    redirect(`/account/s/${userGuilds[0]!.id}/campaigns`);
   }
 
-  const label =
-    session.user?.email ??
-    session.user?.name ??
-    session.user?.id ??
-    "Adventurer";
+  const [installedGuilds, campaignCounts, activeSessions] =
+    guildIds.length > 0
+      ? await Promise.all([
+          db
+            .select()
+            .from(botGuilds)
+            .where(inArray(botGuilds.guildId, guildIds)),
+          db
+            .select({ guildId: campaigns.guildId, value: count() })
+            .from(campaigns)
+            .where(inArray(campaigns.guildId, guildIds))
+            .groupBy(campaigns.guildId),
+          db
+            .select({ guildId: sessions.guildId })
+            .from(sessions)
+            .where(
+              and(
+                inArray(sessions.guildId, guildIds),
+                eq(sessions.status, "active"),
+              ),
+            ),
+        ])
+      : [[], [], []];
+
+  const installedSet = new Set(
+    installedGuilds.filter((g) => g.installed).map((g) => g.guildId),
+  );
+  const campaignsByGuild = new Map(
+    campaignCounts.map((c) => [c.guildId, c.value]),
+  );
+  const liveByGuild = new Set(activeSessions.map((s) => s.guildId));
+
+  const userName =
+    session.user?.name ?? session.user?.email ?? "Adventurer";
 
   return (
-    <Card className="w-full max-w-2xl shadow-[0_18px_48px_rgba(42,33,27,0.12)] border-border bg-card/80">
-      <CardHeader className="space-y-2">
-        <div className="flex">
-          <Badge
-            variant="outline"
-            className="border-primary/40 text-primary uppercase tracking-[0.3em]"
-          >
-            Account
+    <>
+      <Topbar
+        crumbs={[
+          { label: "GRIMOIRE", href: "/account" },
+          { label: "Servers" },
+        ]}
+        right={
+          <InstallBotButton>
+            <Diamond size={5} /> Install on a server
+          </InstallBotButton>
+        }
+      />
+      <div className="page" style={{ maxWidth: 1200 }}>
+        <div className="t-eyebrow" style={{ marginBottom: 12 }}>
+          Welcome back, {userName.split(" ")[0]}
+        </div>
+        <h1 className="t-display" style={{ fontSize: 56, marginBottom: 14 }}>
+          Where do you <em>play?</em>
+        </h1>
+        <p
+          style={{
+            color: "var(--bone-dim)",
+            fontSize: 15,
+            maxWidth: 540,
+            marginBottom: 40,
+          }}
+        >
+          Grimoire scopes everything — campaigns, transcripts, memories, image
+          limits — to the Discord server it lives in. Pick where to enter, or
+          install the bot on a new server.
+        </p>
+
+        {userGuilds.length === 0 ? (
+          <EmptyServers />
+        ) : (
+          <div className="guild-grid">
+            {userGuilds.map((guild) => {
+              const installed = installedSet.has(guild.id);
+              const live = liveByGuild.has(guild.id);
+              const guildCampaigns = campaignsByGuild.get(guild.id) ?? 0;
+              return (
+                <GuildCard
+                  key={guild.id}
+                  id={guild.id}
+                  name={guild.name}
+                  glyph={guild.name.slice(0, 1).toUpperCase()}
+                  installed={installed}
+                  live={live}
+                  campaignCount={guildCampaigns}
+                />
+              );
+            })}
+          </div>
+        )}
+
+        <div
+          style={{
+            marginTop: 40,
+            padding: "20px 24px",
+            border: "0.5px dashed var(--rule)",
+            background: "var(--ink-2)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div className="t-eyebrow" style={{ marginBottom: 6 }}>
+              Don't see a server?
+            </div>
+            <div className="t-meta" style={{ color: "var(--bone-dim)" }}>
+              Install Grimoire on any Discord server you administer. You'll
+              come back here when it's ready.
+            </div>
+          </div>
+          <InstallBotButton>
+            <Diamond size={5} /> Install on a server
+          </InstallBotButton>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function GuildCard({
+  id,
+  name,
+  glyph,
+  installed,
+  live,
+  campaignCount,
+}: {
+  id: string;
+  name: string;
+  glyph: string;
+  installed: boolean;
+  live: boolean;
+  campaignCount: number;
+}) {
+  const Header = (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+      }}
+    >
+      <span className="guild-card__sigil">{glyph}</span>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          alignItems: "flex-end",
+        }}
+      >
+        {live ? (
+          <Badge variant="lit">
+            <Pulse /> live
           </Badge>
-        </div>
-        <CardTitle className="text-3xl text-foreground">
-          Welcome, {label}
-        </CardTitle>
-        <CardDescription className="text-muted-foreground">
-          Your Discord account is linked for session tracking and recaps.
-        </CardDescription>
-      </CardHeader>
+        ) : null}
+        {!installed ? <Badge variant="meta">not installed</Badge> : null}
+      </div>
+    </div>
+  );
 
-      <CardContent className="space-y-6">
-        <div className="grid gap-3 rounded-2xl border border-border bg-secondary/50 p-4 text-sm text-foreground/80">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              User
-            </p>
-            <p className="font-semibold text-foreground">
-              {session.user?.name ?? "Unknown"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Email
-            </p>
-            <p className="font-semibold text-foreground">
-              {session.user?.email ?? "Not provided"}
-            </p>
-          </div>
-        </div>
+  const Body = (
+    <div>
+      <div className="guild-card__name">{name}</div>
+      <div className="t-meta" style={{ marginTop: 6 }}>
+        {campaignCount}{" "}
+        {campaignCount === 1 ? "campaign" : "campaigns"}
+        {installed ? " · bot connected" : " · awaiting install"}
+      </div>
+    </div>
+  );
 
-        <div className="rounded-2xl border border-border bg-secondary/50 p-4">
-          <DiscordGuildSelector />
+  if (installed) {
+    return (
+      <Link
+        href={`/account/s/${id}/campaigns`}
+        className="guild-card"
+        style={{ textDecoration: "none", display: "flex" }}
+      >
+        {Header}
+        {Body}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: 8,
+          }}
+        >
+          <span className="t-meta" style={{ fontSize: 9 }}>
+            /{id}
+          </span>
+          <span className="t-meta t-meta--lit">enter →</span>
         </div>
+      </Link>
+    );
+  }
 
-        <div className="flex flex-wrap gap-3">
-          <SignOutButton className="bg-foreground text-background hover:bg-foreground/90" />
-        </div>
-      </CardContent>
-    </Card>
+  return (
+    <div
+      className="guild-card"
+      style={{ display: "flex", cursor: "default" }}
+    >
+      {Header}
+      {Body}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          marginTop: 8,
+        }}
+      >
+        <span className="t-meta" style={{ fontSize: 9 }}>
+          /{id}
+        </span>
+        <InstallBotButton guildId={id}>
+          <Diamond size={5} /> Install
+        </InstallBotButton>
+      </div>
+    </div>
+  );
+}
+
+function EmptyServers() {
+  return (
+    <div
+      style={{
+        border: "0.5px dashed var(--rule)",
+        padding: "48px 32px",
+        textAlign: "center",
+        background: "var(--ink-2)",
+      }}
+    >
+      <div
+        style={{
+          width: 56,
+          height: 56,
+          margin: "0 auto 18px",
+          border: "0.5px solid var(--rule)",
+          display: "grid",
+          placeItems: "center",
+          color: "var(--bone-mute)",
+        }}
+      >
+        <Tick size={20} />
+      </div>
+      <h2 className="t-display" style={{ fontSize: 28, marginBottom: 12 }}>
+        No servers yet
+      </h2>
+      <p
+        className="t-meta"
+        style={{ maxWidth: 480, margin: "0 auto 24px", lineHeight: 1.6 }}
+      >
+        Grimoire only sees Discord servers where you have Administrator or
+        Manage Guild permissions. If you have those, the server should appear
+        here within a few minutes — or install the bot on a new server now.
+      </p>
+      <InstallBotButton>
+        <Diamond size={5} /> Install on a server
+      </InstallBotButton>
+    </div>
   );
 }

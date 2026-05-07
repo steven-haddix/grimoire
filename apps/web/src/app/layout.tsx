@@ -1,23 +1,30 @@
 import type { Metadata } from "next";
-import { Alegreya, Cinzel } from "next/font/google";
+import { Fraunces, JetBrains_Mono, Lora } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
 
-const cinzel = Cinzel({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  weight: ["400", "600", "700"],
-  variable: "--font-cinzel",
+  variable: "--font-fraunces",
+  axes: ["opsz", "SOFT"],
+  display: "swap",
 });
 
-const alegreya = Alegreya({
+const lora = Lora({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-alegreya",
+  variable: "--font-lora",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Grimoire",
-  description: "Live transcription and summaries for tabletop sessions.",
+  title: "Grimoire — Scribe",
+  description:
+    "A scribe for your tabletop, in your Discord. Live transcription, summaries, and a memory for every campaign.",
   icons: {
     icon: "/favicon.ico",
   },
@@ -29,12 +36,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${cinzel.variable} ${alegreya.variable}`}
+      className={`${fraunces.variable} ${lora.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="text-foreground antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

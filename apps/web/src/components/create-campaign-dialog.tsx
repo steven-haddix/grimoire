@@ -30,7 +30,13 @@ interface Guild {
   name: string;
 }
 
-export function CreateCampaignDialog({ guilds }: { guilds: Guild[] }) {
+export function CreateCampaignDialog({
+  guilds,
+  defaultGuildId,
+}: {
+  guilds: Guild[];
+  defaultGuildId?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -70,7 +76,7 @@ export function CreateCampaignDialog({ guilds }: { guilds: Guild[] }) {
           <div className="grid gap-6 py-4">
             <div className="grid gap-2">
               <Label htmlFor="guildId">Server</Label>
-              <Select name="guildId" required>
+              <Select name="guildId" required defaultValue={defaultGuildId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a server" />
                 </SelectTrigger>

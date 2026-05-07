@@ -1,25 +1,12 @@
 "use client";
 
-import { format } from "date-fns";
-import { Calendar, Clock } from "lucide-react";
-import { useState } from "react";
+import { format, formatDistanceToNow } from "date-fns";
+import Link from "next/link";
+import * as React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Pulse } from "@/components/grimoire/primitives";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface Session {
   id: number;
@@ -51,221 +38,290 @@ interface SessionsListProps {
   guildMap: Record<string, string>;
 }
 
+function durationLabel(start: Date, end: Date | null) {
+  if (!end) return "in progress";
+  const minutes = Math.round((end.getTime() - start.getTime()) / 60000);
+  if (minutes < 1) return "<1m";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rem = minutes % 60;
+  return rem === 0 ? `${hours}h` : `${hours}h ${rem.toString().padStart(2, "0")}m`;
+}
+
+function deriveTitle(text: string | undefined): string {
+  if (!text) return "Untitled session";
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    if (line.startsWith("# ")) return line.slice(2).trim();
+  }
+  for (const line of lines) {
+    if (!line.startsWith("#") && line.length > 6) {
+      return line.length > 80 ? `${line.slice(0, 80)}…` : line;
+    }
+  }
+  return "Untitled session";
+}
+
+function deriveHook(text: string | undefined): string | null {
+  if (!text) return null;
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  // skip leading header, find first paragraph
+  for (const line of lines) {
+    if (line.startsWith("#") || line.startsWith(">")) continue;
+    if (line.startsWith("-") || line.startsWith("*")) continue;
+    if (line.length < 16) continue;
+    return line.length > 240 ? `${line.slice(0, 240)}…` : line;
+  }
+  return null;
+}
+
 export function SessionsList({
   sessions,
   campaigns,
   summariesBySession,
   guildMap,
 }: SessionsListProps) {
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>("all");
+  const [filter, setFilter] = React.useState<string>("all");
 
-  const filteredSessions =
-    selectedCampaignId === "all"
+  const filtered =
+    filter === "all"
       ? sessions
-      : sessions.filter(
-          (s) => s.campaignId === parseInt(selectedCampaignId, 10),
-        );
-
-  const activeSessions = filteredSessions.filter((s) => s.status === "active");
-  const pastSessions = filteredSessions.filter((s) => s.status !== "active");
+      : filter === "active"
+        ? sessions.filter((s) => s.status === "active")
+        : sessions.filter((s) => s.campaignId === parseInt(filter, 10));
 
   const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));
+  const activeCount = sessions.filter((s) => s.status === "active").length;
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          marginBottom: 30,
+          gap: 24,
+          flexWrap: "wrap",
+        }}
+      >
         <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Sessions</h1>
-          <p className="text-muted-foreground">
-            View active sessions and read summaries from past adventures.
-          </p>
+          <div className="t-eyebrow">All sessions across all servers</div>
+          <h1 className="t-display" style={{ fontSize: 44, marginTop: 8 }}>
+            <em>{sessions.length}</em>{" "}
+            {sessions.length === 1 ? "night" : "nights"} of play
+          </h1>
         </div>
-        {campaigns.length > 0 && (
-          <Select
-            value={selectedCampaignId}
-            onValueChange={setSelectedCampaignId}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by campaign" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Campaigns</SelectItem>
-              {campaigns.map((campaign) => (
-                <SelectItem key={campaign.id} value={campaign.id.toString()}>
-                  {campaign.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
       </div>
 
-      {activeSessions.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Active Now
-            </h2>
-          </div>
-          <div className="grid gap-4">
-            {activeSessions.map((s) => (
-              <Card
+      <div className="tabs" style={{ marginBottom: 28 }}>
+        <button
+          type="button"
+          className={`tab ${filter === "all" ? "tab--active" : ""}`}
+          onClick={() => setFilter("all")}
+        >
+          All <small>{sessions.length}</small>
+        </button>
+        {activeCount > 0 ? (
+          <button
+            type="button"
+            className={`tab ${filter === "active" ? "tab--active" : ""}`}
+            onClick={() => setFilter("active")}
+          >
+            Active <small>{activeCount}</small>
+          </button>
+        ) : null}
+        {campaigns.map((c) => {
+          const cnt = sessions.filter((s) => s.campaignId === c.id).length;
+          if (cnt === 0) return null;
+          return (
+            <button
+              type="button"
+              key={c.id}
+              className={`tab ${filter === c.id.toString() ? "tab--active" : ""}`}
+              onClick={() => setFilter(c.id.toString())}
+            >
+              {c.name} <small>{cnt}</small>
+            </button>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p
+          className="t-meta"
+          style={{ paddingTop: 24, fontStyle: "italic" }}
+        >
+          No sessions to show.
+        </p>
+      ) : (
+        <div>
+          {filtered.map((s) => {
+            const summaryList = summariesBySession[s.id] ?? [];
+            const latestSummary = summaryList[0];
+            const title = deriveTitle(latestSummary?.text);
+            const hook = deriveHook(latestSummary?.text);
+            const isLive = s.status === "active";
+            const campaignName = s.campaignId
+              ? campaignMap.get(s.campaignId)
+              : null;
+            const guildName = guildMap[s.guildId] ?? "Unknown";
+
+            return (
+              <Link
                 key={s.id}
-                className="border-emerald-500/20 bg-emerald-500/5"
+                href={
+                  isLive && s.campaignId
+                    ? `/account/s/${s.guildId}/campaigns/${s.campaignId}/live`
+                    : `/account/s/${s.guildId}/sessions/${s.id}`
+                }
+                className="session-row"
+                style={{
+                  gridTemplateColumns: "60px 220px 1fr auto",
+                  textDecoration: "none",
+                  color: "inherit",
+                }}
               >
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">
-                          {guildMap[s.guildId] ?? "Unknown Guild"}
-                        </CardTitle>
-                        {s.campaignId && campaignMap.has(s.campaignId) && (
-                          <Badge variant="outline" className="text-xs">
-                            {campaignMap.get(s.campaignId)}
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription className="flex items-center gap-2">
-                        <Clock className="h-3.5 w-3.5" />
-                        Started {format(s.startedAt, "PPP p")}
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className="border-emerald-500/40 text-emerald-600 bg-emerald-500/10"
+                <div
+                  className="session-num"
+                  style={{ color: isLive ? "var(--copper)" : undefined }}
+                >
+                  #{s.id}
+                </div>
+                <div className="t-meta" style={{ paddingTop: 4 }}>
+                  <span style={{ color: "var(--bone-dim)" }}>
+                    {campaignName ?? guildName}
+                  </span>
+                  <br />
+                  <span>
+                    {isLive
+                      ? `${formatDistanceToNow(s.startedAt, { addSuffix: true })} · running`
+                      : format(s.startedAt, "MMM d, yyyy")}
+                  </span>
+                </div>
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <h3
+                      style={{
+                        fontFamily: "var(--serif)",
+                        fontSize: 19,
+                        margin: 0,
+                        fontWeight: 500,
+                        fontStyle: isLive ? "italic" : "normal",
+                        color: "var(--bone)",
+                        fontVariationSettings: '"opsz" 144',
+                      }}
                     >
-                      Live
-                    </Badge>
+                      {isLive ? "(in progress)" : title}
+                    </h3>
+                    {isLive ? (
+                      <Badge variant="live">
+                        <Pulse /> live
+                      </Badge>
+                    ) : null}
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Recording in progress. Summaries will be generated when the
-                    session ends.
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
+                  {!isLive && hook ? (
+                    <p
+                      style={{
+                        color: "var(--bone-mute)",
+                        fontSize: 12.5,
+                        margin: "6px 0 0",
+                        maxWidth: 560,
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      {hook}
+                    </p>
+                  ) : null}
+                  {summaryList.length === 0 && !isLive ? (
+                    <p
+                      className="t-meta"
+                      style={{
+                        margin: "6px 0 0",
+                        fontStyle: "italic",
+                        color: "var(--bone-mute)",
+                      }}
+                    >
+                      no summary generated
+                    </p>
+                  ) : null}
+                </div>
+                <div
+                  className="t-meta"
+                  style={{ paddingTop: 4, textAlign: "right" }}
+                >
+                  {durationLabel(s.startedAt, s.endedAt)}
+                  <br />
+                  <span style={{ color: "var(--bone-mute)" }}>
+                    {summaryList.length > 0
+                      ? `${summaryList.length} ${summaryList.length === 1 ? "summary" : "summaries"}`
+                      : "—"}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       )}
+    </>
+  );
+}
 
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          History
-        </h2>
+// Markdown renderer used elsewhere; export so other screens can reuse.
+export const markdownComponents = {
+  h1: ({ ...props }) => (
+    <h1
+      style={{
+        fontFamily: "var(--serif)",
+        fontSize: 28,
+        margin: "1.2em 0 0.4em",
+        fontVariationSettings: '"opsz" 144',
+        fontWeight: 500,
+        color: "var(--bone)",
+      }}
+      {...props}
+    />
+  ),
+  h2: ({ ...props }) => (
+    <h2
+      style={{
+        fontFamily: "var(--serif)",
+        fontSize: 22,
+        margin: "1.3em 0 0.4em",
+        fontVariationSettings: '"opsz" 144',
+        fontWeight: 500,
+        color: "var(--bone)",
+      }}
+      {...props}
+    />
+  ),
+  h3: ({ ...props }) => (
+    <h3
+      style={{
+        fontFamily: "var(--mono)",
+        fontWeight: 500,
+        fontSize: 11,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: "var(--copper)",
+        margin: "1.6em 0 0.6em",
+      }}
+      {...props}
+    />
+  ),
+};
 
-        {pastSessions.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">
-            {selectedCampaignId === "all"
-              ? "No past sessions found."
-              : "No past sessions found for this campaign."}
-          </p>
-        ) : (
-          <div className="grid gap-6">
-            {pastSessions.map((s) => {
-              const sessionSummaryList = summariesBySession[s.id] || [];
-              const latestSummary = sessionSummaryList[0];
-
-              return (
-                <Card key={s.id} className="overflow-hidden">
-                  <CardHeader className="bg-secondary/30 pb-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <CardTitle className="text-lg">
-                            {guildMap[s.guildId] ?? "Unknown Guild"}
-                          </CardTitle>
-                          {s.campaignId && campaignMap.has(s.campaignId) && (
-                            <Badge variant="outline" className="text-xs">
-                              {campaignMap.get(s.campaignId)}
-                            </Badge>
-                          )}
-                        </div>
-                        <CardDescription className="flex items-center gap-2 mt-1">
-                          <Calendar className="h-3.5 w-3.5" />
-                          {format(s.startedAt, "PPP")}
-                          {s.endedAt && ` • ${format(s.endedAt, "p")}`}
-                        </CardDescription>
-                      </div>
-                      <Badge variant="secondary">{s.status}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-6">
-                    {latestSummary ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/90">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            h1: ({ node, ...props }) => (
-                              <h1
-                                className="text-xl font-bold mt-6 mb-4 text-primary"
-                                {...props}
-                              />
-                            ),
-                            h2: ({ node, ...props }) => (
-                              <h2
-                                className="text-lg font-bold mt-5 mb-3 text-foreground"
-                                {...props}
-                              />
-                            ),
-                            h3: ({ node, ...props }) => (
-                              <h3
-                                className="text-base font-semibold mt-4 mb-2 text-foreground/90"
-                                {...props}
-                              />
-                            ),
-                            ul: ({ node, ...props }) => (
-                              <ul
-                                className="list-disc pl-6 mb-4 space-y-1"
-                                {...props}
-                              />
-                            ),
-                            ol: ({ node, ...props }) => (
-                              <ol
-                                className="list-decimal pl-6 mb-4 space-y-1"
-                                {...props}
-                              />
-                            ),
-                            li: ({ node, ...props }) => (
-                              <li className="pl-1" {...props} />
-                            ),
-                            blockquote: ({ node, ...props }) => (
-                              <blockquote
-                                className="border-l-4 border-primary/50 pl-4 italic text-muted-foreground my-4"
-                                {...props}
-                              />
-                            ),
-                            code: ({ node, ...props }) => (
-                              <code
-                                className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground"
-                                {...props}
-                              />
-                            ),
-                          }}
-                        >
-                          {latestSummary.text}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">
-                        No summary generated for this session.
-                      </p>
-                    )}
-                    {sessionSummaryList.length > 1 && (
-                      <p className="text-xs text-muted-foreground mt-4">
-                        +{sessionSummaryList.length - 1} more updates
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </section>
+export function MarkdownSummary({ children }: { children: string }) {
+  return (
+    <div className="prose-grim">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
     </div>
   );
 }

@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { buildDiscordBotInstallUrl } from "@/lib/discord/installUrl";
 
 type InstallBotButtonProps = {
   guildId?: string;
+  className?: string;
+  size?: "default" | "sm" | "lg";
+  variant?: "default" | "primary" | "ghost" | "secondary" | "outline";
+  children?: ReactNode;
 };
 
-export function InstallBotButton({ guildId }: InstallBotButtonProps) {
+export function InstallBotButton({
+  guildId,
+  className,
+  size = "default",
+  variant = "primary",
+  children,
+}: InstallBotButtonProps) {
   const appId = process.env.NEXT_PUBLIC_DISCORD_APP_ID;
   const [origin, setOrigin] = useState<string>("");
 
@@ -18,9 +28,9 @@ export function InstallBotButton({ guildId }: InstallBotButtonProps) {
 
   if (!appId) {
     return (
-      <p className="text-xs text-destructive">
+      <span className="t-meta" style={{ color: "var(--rust)" }}>
         Missing Discord app ID configuration.
-      </p>
+      </span>
     );
   }
 
@@ -33,9 +43,9 @@ export function InstallBotButton({ guildId }: InstallBotButtonProps) {
   });
 
   return (
-    <Button asChild>
+    <Button asChild size={size} variant={variant} className={className}>
       <a href={installUrl} target="_blank" rel="noreferrer">
-        Install bot to server
+        {children ?? "Install bot to server"}
       </a>
     </Button>
   );

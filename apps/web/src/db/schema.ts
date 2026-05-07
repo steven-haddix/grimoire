@@ -1,12 +1,20 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  customType,
   integer,
   pgTable,
   serial,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+
+// Postgres bytea — stored as a Node Buffer in TS land.
+const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 export const campaigns = pgTable("campaigns", {
   id: serial("id").primaryKey(),
@@ -91,10 +99,30 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const illustrations = pgTable("illustrations", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => campaigns.id, { onDelete: "cascade" }),
+  sessionId: integer("session_id").references(() => sessions.id, {
+    onDelete: "set null",
+  }),
+  prompt: text("prompt").notNull(),
+  userPrompt: text("user_prompt"),
+  caption: text("caption"),
+  mimeType: text("mime_type").notNull(),
+  data: bytea("data").notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  source: text("source").notNull().default("web"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const campaignsRelations = relations(campaigns, ({ many }) => ({
   sessions: many(sessions),
   memories: many(memories),
   chatMessages: many(chatMessages),
+  illustrations: many(illustrations),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
@@ -138,6 +166,17 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
   campaign: one(campaigns, {
     fields: [chatMessages.campaignId],
     references: [campaigns.id],
+  }),
+}));
+
+export const illustrationsRelations = relations(illustrations, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [illustrations.campaignId],
+    references: [campaigns.id],
+  }),
+  session: one(sessions, {
+    fields: [illustrations.sessionId],
+    references: [sessions.id],
   }),
 }));
 
