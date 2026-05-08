@@ -7,7 +7,7 @@ import { botGuilds, campaigns, sessions } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
 import { Diamond, Tick } from "@/components/grimoire/marks";
-import { Pulse, Topbar } from "@/components/grimoire/primitives";
+import { Pulse } from "@/components/grimoire/primitives";
 import { InstallBotButton } from "@/components/install-bot-button";
 import { Badge } from "@/components/ui/badge";
 
@@ -55,93 +55,55 @@ export default async function AccountHome() {
   );
   const liveByGuild = new Set(activeSessions.map((s) => s.guildId));
 
-  const userName =
-    session.user?.name ?? session.user?.email ?? "Adventurer";
-
   return (
-    <>
-      <Topbar
-        crumbs={[
-          { label: "GRIMOIRE", href: "/account" },
-          { label: "Servers" },
-        ]}
-        right={
-          <InstallBotButton>
-            <Diamond size={5} /> Install on a server
-          </InstallBotButton>
-        }
-      />
-      <div className="page" style={{ maxWidth: 1200 }}>
-        <div className="t-eyebrow" style={{ marginBottom: 12 }}>
-          Welcome back, {userName.split(" ")[0]}
+    <div className="page" style={{ maxWidth: 1100 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 24,
+          flexWrap: "wrap",
+          marginBottom: 24,
+        }}
+      >
+        <div>
+          <div className="t-eyebrow">Pick a server</div>
+          <h1
+            className="t-display"
+            style={{ fontSize: 36, marginTop: 6 }}
+          >
+            Your <em>servers</em>
+          </h1>
         </div>
-        <h1 className="t-display" style={{ fontSize: 56, marginBottom: 14 }}>
-          Where do you <em>play?</em>
-        </h1>
-        <p
-          style={{
-            color: "var(--bone-dim)",
-            fontSize: 15,
-            maxWidth: 540,
-            marginBottom: 40,
-          }}
-        >
-          Grimoire scopes everything — campaigns, transcripts, memories, image
-          limits — to the Discord server it lives in. Pick where to enter, or
-          install the bot on a new server.
-        </p>
-
-        {userGuilds.length === 0 ? (
-          <EmptyServers />
-        ) : (
-          <div className="guild-grid">
-            {userGuilds.map((guild) => {
-              const installed = installedSet.has(guild.id);
-              const live = liveByGuild.has(guild.id);
-              const guildCampaigns = campaignsByGuild.get(guild.id) ?? 0;
-              return (
-                <GuildCard
-                  key={guild.id}
-                  id={guild.id}
-                  name={guild.name}
-                  glyph={guild.name.slice(0, 1).toUpperCase()}
-                  installed={installed}
-                  live={live}
-                  campaignCount={guildCampaigns}
-                />
-              );
-            })}
-          </div>
-        )}
-
-        <div
-          style={{
-            marginTop: 40,
-            padding: "20px 24px",
-            border: "0.5px dashed var(--rule)",
-            background: "var(--ink-2)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div className="t-eyebrow" style={{ marginBottom: 6 }}>
-              Don't see a server?
-            </div>
-            <div className="t-meta" style={{ color: "var(--bone-dim)" }}>
-              Install Grimoire on any Discord server you administer. You'll
-              come back here when it's ready.
-            </div>
-          </div>
-          <InstallBotButton>
-            <Diamond size={5} /> Install on a server
-          </InstallBotButton>
-        </div>
+        <InstallBotButton>
+          <Diamond size={5} /> Install on a server
+        </InstallBotButton>
       </div>
-    </>
+
+      {userGuilds.length === 0 ? (
+        <EmptyServers />
+      ) : (
+        <div className="guild-grid">
+          {userGuilds.map((guild) => {
+            const installed = installedSet.has(guild.id);
+            const live = liveByGuild.has(guild.id);
+            const guildCampaigns = campaignsByGuild.get(guild.id) ?? 0;
+            return (
+              <GuildCard
+                key={guild.id}
+                id={guild.id}
+                name={guild.name}
+                glyph={guild.name.slice(0, 1).toUpperCase()}
+                installed={installed}
+                live={live}
+                campaignCount={guildCampaigns}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

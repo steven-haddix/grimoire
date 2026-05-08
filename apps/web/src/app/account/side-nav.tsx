@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 import { authClient } from "@/lib/auth/client";
-import { BrandMark, Diamond, Tick } from "@/components/grimoire/marks";
+import { BrandMark, Diamond } from "@/components/grimoire/marks";
 
 export type GuildContext = {
   id: string;
@@ -56,19 +56,23 @@ type Scope =
       kind: "guild";
       guildId: string;
       campaignId: number | null;
-      campaignSubpath: "live" | "memories" | null;
+      campaignSubpath: "live" | "memories" | "illustrations" | null;
     };
 
 function parseScope(pathname: string): Scope {
   const match = pathname.match(
-    /^\/account\/s\/([^/]+)(?:\/campaigns\/(\d+)(?:\/(live|memories))?)?/,
+    /^\/account\/s\/([^/]+)(?:\/campaigns\/(\d+)(?:\/(live|memories|illustrations))?)?/,
   );
   if (!match) return { kind: "global" };
   const guildId = match[1] ?? "";
   if (!guildId) return { kind: "global" };
   const campaignId = match[2] ? Number.parseInt(match[2], 10) : null;
   const campaignSubpath =
-    match[3] === "live" || match[3] === "memories" ? match[3] : null;
+    match[3] === "live" ||
+    match[3] === "memories" ||
+    match[3] === "illustrations"
+      ? match[3]
+      : null;
   return {
     kind: "guild",
     guildId,
@@ -80,6 +84,7 @@ function parseScope(pathname: string): Scope {
 export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
   const pathname = usePathname() ?? "/account";
   const scope = parseScope(pathname);
+  const onPicker = pathname === "/account";
 
   const activeGuild =
     scope.kind === "guild"
@@ -96,51 +101,30 @@ export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
   const scopedCounts =
     (activeGuild && counts.perGuild[activeGuild.id]) || counts.cross;
 
-  const libraryItems: Array<{
-    href: string;
-    label: string;
-    count?: number | string;
-    matchExact?: boolean;
-  }> = activeGuild
+  const libraryItems = activeGuild
     ? [
         {
           href: `/account/s/${activeGuild.id}/campaigns`,
           label: "Campaigns",
-          count: scopedCounts?.campaigns,
+          count: scopedCounts.campaigns,
           matchExact: true,
         },
         {
           href: `/account/s/${activeGuild.id}/sessions`,
           label: "Sessions",
-          count: scopedCounts?.sessions,
-        },
-        {
-          href: "/account",
-          label: "Switch server",
-          matchExact: true,
+          count: scopedCounts.sessions,
+          matchExact: false,
         },
       ]
-    : [
-        {
-          href: "/account",
-          label: "Servers",
-          matchExact: true,
-          count: guilds.length,
-        },
-        {
-          href: "/account/campaigns",
-          label: "All campaigns",
-          count: counts.cross.campaigns,
-        },
-        {
-          href: "/account/sessions",
-          label: "All sessions",
-          count: counts.cross.sessions,
-        },
-      ];
+    : [];
 
   const renderNavItem = (
-    item: (typeof libraryItems)[number],
+    item: {
+      href: string;
+      label: string;
+      count?: number | string;
+      matchExact?: boolean;
+    },
     depth = 0,
   ) => {
     const active = item.matchExact
@@ -181,56 +165,21 @@ export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
         </span>
       </Link>
 
-      {activeGuild ? (
+      <ServerPickerCard
+        activeGuild={activeGuild}
+        scopedCampaigns={scopedCounts.campaigns}
+        guildCount={guilds.length}
+        onPicker={onPicker}
+      />
+
+      {libraryItems.length > 0 ? (
         <div className="nav-section">
           <div className="nav-section__lbl">
-            <span>Server</span>
-            <Tick size={8} />
+            <span>This server</span>
           </div>
-          <Link
-            href={`/account/s/${activeGuild.id}/campaigns`}
-            className="nav-guild"
-          >
-            <span className="nav-guild__sigil">
-              {activeGuild.glyph ??
-                activeGuild.name.slice(0, 1).toUpperCase()}
-            </span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span
-                style={{
-                  display: "block",
-                  color: "var(--bone)",
-                  fontSize: 11.5,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {activeGuild.name}
-              </span>
-              <span
-                style={{
-                  display: "block",
-                  fontSize: 9.5,
-                  color: "var(--bone-mute)",
-                  letterSpacing: "0.10em",
-                  marginTop: 1,
-                }}
-              >
-                {scopedCounts.campaigns}{" "}
-                {scopedCounts.campaigns === 1 ? "campaign" : "campaigns"}
-              </span>
-            </span>
-          </Link>
+          {libraryItems.map((item) => renderNavItem(item))}
         </div>
       ) : null}
-
-      <div className="nav-section">
-        <div className="nav-section__lbl">
-          <span>{activeGuild ? "This server" : "Library"}</span>
-        </div>
-        {libraryItems.map((item) => renderNavItem(item))}
-      </div>
 
       {activeGuild && activeCampaign ? (
         <div className="nav-section">
@@ -291,36 +240,6 @@ export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
         </div>
       ) : null}
 
-      {!activeGuild && guilds.length > 1 ? (
-        <div className="nav-section">
-          <div className="nav-section__lbl">
-            <span>Your servers</span>
-          </div>
-          {guilds.slice(0, 6).map((g) => (
-            <Link
-              key={g.id}
-              href={`/account/s/${g.id}/campaigns`}
-              className="nav-item"
-              style={{ paddingLeft: 24 }}
-            >
-              <Diamond size={5} />
-              <span
-                style={{
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {g.name}
-              </span>
-              <small>
-                {counts.perGuild[g.id]?.campaigns ?? 0}
-              </small>
-            </Link>
-          ))}
-        </div>
-      ) : null}
-
       <div className="nav-foot">
         <span className="nav-foot__avatar">{user.initial}</span>
         <span style={{ flex: 1, minWidth: 0 }}>
@@ -342,6 +261,137 @@ export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
         <SignOutButton />
       </div>
     </aside>
+  );
+}
+
+function ServerPickerCard({
+  activeGuild,
+  scopedCampaigns,
+  guildCount,
+  onPicker,
+}: {
+  activeGuild: GuildContext | null;
+  scopedCampaigns: number;
+  guildCount: number;
+  onPicker: boolean;
+}) {
+  // Card is a Link to the picker page. The card is the dropdown — clicking
+  // it lands you on /account where you can switch.
+  if (activeGuild) {
+    return (
+      <div className="nav-section">
+        <div className="nav-section__lbl">
+          <span>Server</span>
+          <span className="t-meta t-meta--lit" style={{ fontSize: 9 }}>
+            switch
+          </span>
+        </div>
+        <Link href="/account" className="nav-guild">
+          <span className="nav-guild__sigil">
+            {activeGuild.glyph ??
+              activeGuild.name.slice(0, 1).toUpperCase()}
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span
+              style={{
+                display: "block",
+                color: "var(--bone)",
+                fontSize: 11.5,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {activeGuild.name}
+            </span>
+            <span
+              style={{
+                display: "block",
+                fontSize: 9.5,
+                color: "var(--bone-mute)",
+                letterSpacing: "0.10em",
+                marginTop: 1,
+              }}
+            >
+              {scopedCampaigns}{" "}
+              {scopedCampaigns === 1 ? "campaign" : "campaigns"}
+            </span>
+          </span>
+          <span
+            aria-hidden
+            style={{
+              color: "var(--bone-mute)",
+              fontSize: 12,
+              marginLeft: 8,
+            }}
+          >
+            ▾
+          </span>
+        </Link>
+      </div>
+    );
+  }
+
+  // Unscoped — server card invites a pick. Dimmed to copper outline if you're
+  // already on the picker page.
+  return (
+    <div className="nav-section">
+      <div className="nav-section__lbl">
+        <span>Server</span>
+        <span className="t-meta" style={{ fontSize: 9 }}>
+          {guildCount} {guildCount === 1 ? "available" : "available"}
+        </span>
+      </div>
+      <Link
+        href="/account"
+        className="nav-guild"
+        style={{
+          borderColor: onPicker ? "var(--copper-dim)" : undefined,
+          color: onPicker ? "var(--bone)" : undefined,
+        }}
+      >
+        <span
+          className="nav-guild__sigil"
+          style={{
+            color: onPicker ? "var(--copper)" : "var(--bone-dim)",
+          }}
+        >
+          ?
+        </span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span
+            style={{
+              display: "block",
+              color: "var(--bone)",
+              fontSize: 11.5,
+            }}
+          >
+            Pick a server
+          </span>
+          <span
+            style={{
+              display: "block",
+              fontSize: 9.5,
+              color: "var(--bone-mute)",
+              letterSpacing: "0.10em",
+              marginTop: 1,
+            }}
+          >
+            no scope active
+          </span>
+        </span>
+        <span
+          aria-hidden
+          style={{
+            color: "var(--bone-mute)",
+            fontSize: 12,
+            marginLeft: 8,
+          }}
+        >
+          ▾
+        </span>
+      </Link>
+    </div>
   );
 }
 
