@@ -212,7 +212,7 @@ function CampaignPickerCard({
             switch
           </span>
         </div>
-        <Link href="/account" className="nav-guild">
+        <Link href="/account?pick=1" className="nav-guild">
           <span className="nav-guild__sigil">
             {activeCampaign.name.slice(0, 1).toUpperCase()}
           </span>
@@ -271,7 +271,7 @@ function CampaignPickerCard({
         </span>
       </div>
       <Link
-        href="/account"
+        href="/account?pick=1"
         className="nav-guild"
         style={{
           borderColor: onPicker ? "var(--copper-dim)" : undefined,

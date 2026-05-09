@@ -8,7 +8,7 @@ import {
   max,
 } from "drizzle-orm";
 import Link from "next/link";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { CreateCampaignDialog } from "@/components/create-campaign-dialog";
 import { Diamond } from "@/components/grimoire/marks";
@@ -20,9 +20,16 @@ import { botGuilds, campaigns, sessions } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
 
-export default async function AccountHome() {
+export default async function AccountHome({
+  searchParams,
+}: {
+  searchParams: Promise<{ pick?: string | string[] }>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/auth/sign-in");
+
+  const { pick } = await searchParams;
+  const forcePicker = pick !== undefined;
 
   const userGuilds = await getUserAdminGuilds();
   const guildIds = userGuilds.map((g) => g.id);
@@ -40,6 +47,18 @@ export default async function AccountHome() {
   // Auto-redirect single-campaign users straight into their campaign.
   if (allCampaigns.length === 1) {
     redirect(`/account/c/${allCampaigns[0]!.id}`);
+  }
+
+  // Honor the last-selected campaign unless the user explicitly asked for the picker.
+  if (!forcePicker && allCampaigns.length > 1) {
+    const lastId = (await cookies()).get("grim-last-campaign")?.value;
+    const lastIdNum = lastId ? Number(lastId) : Number.NaN;
+    if (
+      Number.isFinite(lastIdNum) &&
+      allCampaigns.some((c) => c.id === lastIdNum)
+    ) {
+      redirect(`/account/c/${lastIdNum}`);
+    }
   }
 
   const campaignIds = allCampaigns.map((c) => c.id);
