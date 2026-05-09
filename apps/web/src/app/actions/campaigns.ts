@@ -57,7 +57,7 @@ export async function createCampaign(formData: FormData) {
       .where(eq(botGuilds.guildId, guildId));
   }
 
-  revalidatePath("/account/campaigns");
+  revalidatePath("/account");
   return { success: true, campaignId: newCampaign.id };
 }
 
@@ -87,9 +87,8 @@ export async function setActiveCampaign(campaignId: number, guildId: string) {
     .set({ activeCampaignId: campaignId })
     .where(eq(botGuilds.guildId, guildId));
 
-  revalidatePath("/account/campaigns");
-  revalidatePath(`/account/s/${guildId}/campaigns`);
-  revalidatePath(`/account/s/${guildId}/campaigns/${campaignId}`);
+  revalidatePath("/account");
+  revalidatePath(`/account/c/${campaignId}`);
   return { success: true };
 }
 
@@ -121,8 +120,7 @@ export async function deleteCampaign(campaignId: number, guildId: string) {
     .delete(campaigns)
     .where(and(eq(campaigns.id, campaignId), eq(campaigns.guildId, guildId)));
 
-  revalidatePath("/account/campaigns");
-  revalidatePath(`/account/s/${guildId}/campaigns`);
+  revalidatePath("/account");
   return { success: true };
 }
 
@@ -165,8 +163,7 @@ export async function updateCampaign(formData: FormData) {
     })
     .where(eq(campaigns.id, campaignId));
 
-  revalidatePath("/account/campaigns");
-  revalidatePath(`/account/s/${guildId}/campaigns`);
-  revalidatePath(`/account/s/${guildId}/campaigns/${campaignId}`);
+  revalidatePath("/account");
+  revalidatePath(`/account/c/${campaignId}`);
   return { success: true };
 }

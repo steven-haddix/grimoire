@@ -52,19 +52,15 @@ export async function createMemory(formData: FormData) {
     source: source || null,
   });
 
-  revalidatePath(
-    `/account/s/${campaign.guildId}/campaigns/${campaignId}/memories`,
-  );
-  revalidatePath(`/account/s/${campaign.guildId}/campaigns/${campaignId}`);
+  revalidatePath(`/account/c/${campaignId}/memories`);
+  revalidatePath(`/account/c/${campaignId}`);
 }
 
 export async function deleteMemory(memoryId: number, campaignId: number) {
-  const campaign = await assertCampaignAccess(campaignId);
+  await assertCampaignAccess(campaignId);
   await db
     .delete(memories)
     .where(and(eq(memories.id, memoryId), eq(memories.campaignId, campaignId)));
-  revalidatePath(
-    `/account/s/${campaign.guildId}/campaigns/${campaignId}/memories`,
-  );
-  revalidatePath(`/account/s/${campaign.guildId}/campaigns/${campaignId}`);
+  revalidatePath(`/account/c/${campaignId}/memories`);
+  revalidatePath(`/account/c/${campaignId}`);
 }

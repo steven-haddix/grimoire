@@ -1,38 +1,23 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 import { authClient } from "@/lib/auth/client";
-import { BrandMark, Diamond } from "@/components/grimoire/marks";
+import { Diamond } from "@/components/grimoire/marks";
 
-export type GuildContext = {
-  id: string;
-  name: string;
-  glyph?: string;
-};
-
-export type CampaignContext = {
+export type CampaignNavEntry = {
   id: number;
   name: string;
   guildId: string;
+  guildName: string;
   isActive?: boolean;
+  sessionCount: number;
 };
 
 export type LibraryCounts = {
-  cross: {
-    campaigns: number;
-    sessions: number;
-    memories: number;
-  };
-  perGuild: Record<
-    string,
-    {
-      campaigns: number;
-      sessions: number;
-      memories: number;
-    }
-  >;
+  perCampaignSessions: Record<number, number>;
   perCampaignMemories: Record<number, number>;
   perCampaignIllustrations: Record<number, number>;
 };
@@ -45,78 +30,44 @@ type UserContext = {
 
 type SideNavProps = {
   user: UserContext;
-  guilds: GuildContext[];
-  campaigns: CampaignContext[];
+  campaigns: CampaignNavEntry[];
   counts: LibraryCounts;
 };
 
 type Scope =
   | { kind: "global" }
   | {
-      kind: "guild";
-      guildId: string;
-      campaignId: number | null;
-      campaignSubpath: "live" | "memories" | "illustrations" | null;
+      kind: "campaign";
+      campaignId: number;
+      subpath: "live" | "memories" | "illustrations" | "sessions" | null;
     };
 
 function parseScope(pathname: string): Scope {
   const match = pathname.match(
-    /^\/account\/s\/([^/]+)(?:\/campaigns\/(\d+)(?:\/(live|memories|illustrations))?)?/,
+    /^\/account\/c\/(\d+)(?:\/(live|memories|illustrations|sessions))?/,
   );
   if (!match) return { kind: "global" };
-  const guildId = match[1] ?? "";
-  if (!guildId) return { kind: "global" };
-  const campaignId = match[2] ? Number.parseInt(match[2], 10) : null;
-  const campaignSubpath =
-    match[3] === "live" ||
-    match[3] === "memories" ||
-    match[3] === "illustrations"
-      ? match[3]
+  const campaignId = Number.parseInt(match[1] ?? "", 10);
+  if (!Number.isFinite(campaignId)) return { kind: "global" };
+  const subpath =
+    match[2] === "live" ||
+    match[2] === "memories" ||
+    match[2] === "illustrations" ||
+    match[2] === "sessions"
+      ? match[2]
       : null;
-  return {
-    kind: "guild",
-    guildId,
-    campaignId: Number.isFinite(campaignId) ? campaignId : null,
-    campaignSubpath,
-  };
+  return { kind: "campaign", campaignId, subpath };
 }
 
-export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
+export function SideNav({ user, campaigns, counts }: SideNavProps) {
   const pathname = usePathname() ?? "/account";
   const scope = parseScope(pathname);
   const onPicker = pathname === "/account";
 
-  const activeGuild =
-    scope.kind === "guild"
-      ? guilds.find((g) => g.id === scope.guildId) ?? null
-      : null;
   const activeCampaign =
-    scope.kind === "guild" && scope.campaignId
-      ? campaigns.find(
-          (c) =>
-            c.id === scope.campaignId && c.guildId === scope.guildId,
-        ) ?? null
+    scope.kind === "campaign"
+      ? campaigns.find((c) => c.id === scope.campaignId) ?? null
       : null;
-
-  const scopedCounts =
-    (activeGuild && counts.perGuild[activeGuild.id]) || counts.cross;
-
-  const libraryItems = activeGuild
-    ? [
-        {
-          href: `/account/s/${activeGuild.id}/campaigns`,
-          label: "Campaigns",
-          count: scopedCounts.campaigns,
-          matchExact: true,
-        },
-        {
-          href: `/account/s/${activeGuild.id}/sessions`,
-          label: "Sessions",
-          count: scopedCounts.sessions,
-          matchExact: false,
-        },
-      ]
-    : [];
 
   const renderNavItem = (
     item: {
@@ -151,8 +102,18 @@ export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
         className="nav-brand"
         style={{ textDecoration: "none" }}
       >
-        <span className="nav-brand__mark">
-          <BrandMark size={28} />
+        <span
+          className="nav-brand__mark"
+          style={{ border: 0, padding: 0 }}
+        >
+          <Image
+            src="/logo.png"
+            alt="Grimoire"
+            width={32}
+            height={32}
+            priority
+            style={{ width: 32, height: 32, objectFit: "contain" }}
+          />
         </span>
         <span>
           <span className="nav-brand__name">Grimoire</span>
@@ -165,34 +126,16 @@ export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
         </span>
       </Link>
 
-      <ServerPickerCard
-        activeGuild={activeGuild}
-        scopedCampaigns={scopedCounts.campaigns}
-        guildCount={guilds.length}
+      <CampaignPickerCard
+        activeCampaign={activeCampaign}
+        campaignCount={campaigns.length}
         onPicker={onPicker}
       />
 
-      {libraryItems.length > 0 ? (
+      {activeCampaign ? (
         <div className="nav-section">
           <div className="nav-section__lbl">
-            <span>This server</span>
-          </div>
-          {libraryItems.map((item) => renderNavItem(item))}
-        </div>
-      ) : null}
-
-      {activeGuild && activeCampaign ? (
-        <div className="nav-section">
-          <div className="nav-section__lbl">
-            <span
-              style={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {activeCampaign.name}
-            </span>
+            <span>This campaign</span>
             {activeCampaign.isActive ? (
               <span
                 className="t-meta t-meta--lit"
@@ -202,41 +145,28 @@ export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
               </span>
             ) : null}
           </div>
-          {renderNavItem(
-            {
-              href: `/account/s/${activeGuild.id}/campaigns/${activeCampaign.id}`,
-              label: "Overview",
-              matchExact: true,
-            },
-            1,
-          )}
-          {renderNavItem(
-            {
-              href: `/account/s/${activeGuild.id}/campaigns/${activeCampaign.id}/live`,
-              label: "Live session",
-              matchExact: true,
-            },
-            1,
-          )}
-          {renderNavItem(
-            {
-              href: `/account/s/${activeGuild.id}/campaigns/${activeCampaign.id}/memories`,
-              label: "Memories",
-              count: counts.perCampaignMemories[activeCampaign.id] ?? 0,
-              matchExact: true,
-            },
-            1,
-          )}
-          {renderNavItem(
-            {
-              href: `/account/s/${activeGuild.id}/campaigns/${activeCampaign.id}/illustrations`,
-              label: "Illustrations",
-              count:
-                counts.perCampaignIllustrations[activeCampaign.id] ?? 0,
-              matchExact: true,
-            },
-            1,
-          )}
+          {renderNavItem({
+            href: `/account/c/${activeCampaign.id}`,
+            label: "Overview",
+            matchExact: true,
+          })}
+          {renderNavItem({
+            href: `/account/c/${activeCampaign.id}/live`,
+            label: "Live session",
+            matchExact: true,
+          })}
+          {renderNavItem({
+            href: `/account/c/${activeCampaign.id}/memories`,
+            label: "Memories",
+            count: counts.perCampaignMemories[activeCampaign.id] ?? 0,
+            matchExact: true,
+          })}
+          {renderNavItem({
+            href: `/account/c/${activeCampaign.id}/illustrations`,
+            label: "Illustrations",
+            count: counts.perCampaignIllustrations[activeCampaign.id] ?? 0,
+            matchExact: true,
+          })}
         </div>
       ) : null}
 
@@ -264,57 +194,57 @@ export function SideNav({ user, guilds, campaigns, counts }: SideNavProps) {
   );
 }
 
-function ServerPickerCard({
-  activeGuild,
-  scopedCampaigns,
-  guildCount,
+function CampaignPickerCard({
+  activeCampaign,
+  campaignCount,
   onPicker,
 }: {
-  activeGuild: GuildContext | null;
-  scopedCampaigns: number;
-  guildCount: number;
+  activeCampaign: CampaignNavEntry | null;
+  campaignCount: number;
   onPicker: boolean;
 }) {
-  // Card is a Link to the picker page. The card is the dropdown — clicking
-  // it lands you on /account where you can switch.
-  if (activeGuild) {
+  if (activeCampaign) {
     return (
       <div className="nav-section">
         <div className="nav-section__lbl">
-          <span>Server</span>
+          <span>Campaign</span>
           <span className="t-meta t-meta--lit" style={{ fontSize: 9 }}>
             switch
           </span>
         </div>
         <Link href="/account" className="nav-guild">
           <span className="nav-guild__sigil">
-            {activeGuild.glyph ??
-              activeGuild.name.slice(0, 1).toUpperCase()}
+            {activeCampaign.name.slice(0, 1).toUpperCase()}
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span
               style={{
                 display: "block",
+                fontFamily: "var(--serif)",
                 color: "var(--bone)",
-                fontSize: 11.5,
+                fontSize: 13,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                fontVariationSettings: '"opsz" 144',
+              }}
+            >
+              {activeCampaign.name}
+            </span>
+            <span
+              style={{
+                display: "block",
+                fontFamily: "var(--mono)",
+                fontSize: 9.5,
+                color: "var(--bone-mute)",
+                letterSpacing: "0.10em",
+                marginTop: 1,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
               }}
             >
-              {activeGuild.name}
-            </span>
-            <span
-              style={{
-                display: "block",
-                fontSize: 9.5,
-                color: "var(--bone-mute)",
-                letterSpacing: "0.10em",
-                marginTop: 1,
-              }}
-            >
-              {scopedCampaigns}{" "}
-              {scopedCampaigns === 1 ? "campaign" : "campaigns"}
+              {activeCampaign.guildName}
             </span>
           </span>
           <span
@@ -332,14 +262,12 @@ function ServerPickerCard({
     );
   }
 
-  // Unscoped — server card invites a pick. Dimmed to copper outline if you're
-  // already on the picker page.
   return (
     <div className="nav-section">
       <div className="nav-section__lbl">
-        <span>Server</span>
+        <span>Campaign</span>
         <span className="t-meta" style={{ fontSize: 9 }}>
-          {guildCount} {guildCount === 1 ? "available" : "available"}
+          {campaignCount} {campaignCount === 1 ? "available" : "available"}
         </span>
       </div>
       <Link
@@ -347,7 +275,6 @@ function ServerPickerCard({
         className="nav-guild"
         style={{
           borderColor: onPicker ? "var(--copper-dim)" : undefined,
-          color: onPicker ? "var(--bone)" : undefined,
         }}
       >
         <span
@@ -366,11 +293,12 @@ function ServerPickerCard({
               fontSize: 11.5,
             }}
           >
-            Pick a server
+            Pick a campaign
           </span>
           <span
             style={{
               display: "block",
+              fontFamily: "var(--mono)",
               fontSize: 9.5,
               color: "var(--bone-mute)",
               letterSpacing: "0.10em",

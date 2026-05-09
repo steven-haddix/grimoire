@@ -9,31 +9,24 @@ import { getUserAdminGuilds } from "@/lib/discord/server";
 import { MemoriesView } from "./memories-view";
 
 interface MemoriesPageProps {
-  params: Promise<{ guildId: string; id: string }>;
+  params: Promise<{ id: string }>;
 }
 
 export default async function MemoriesPage(props: MemoriesPageProps) {
   const params = await props.params;
-  const guildId = params.guildId;
   const campaignId = parseInt(params.id, 10);
   if (Number.isNaN(campaignId)) notFound();
 
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/auth/sign-in");
 
-  const userGuilds = await getUserAdminGuilds();
-  const guild = userGuilds.find((g) => g.id === guildId);
-  if (!guild) notFound();
-
   const campaign = await db.query.campaigns.findFirst({
     where: eq(campaigns.id, campaignId),
   });
   if (!campaign) notFound();
-  if (campaign.guildId !== guildId) {
-    redirect(
-      `/account/s/${campaign.guildId}/campaigns/${campaign.id}/memories`,
-    );
-  }
+
+  const userGuilds = await getUserAdminGuilds();
+  if (!userGuilds.some((g) => g.id === campaign.guildId)) notFound();
 
   const all = await db
     .select()
@@ -46,10 +39,9 @@ export default async function MemoriesPage(props: MemoriesPageProps) {
       <Topbar
         crumbs={[
           { label: "GRIMOIRE", href: "/account" },
-          { label: guild.name, href: `/account/s/${guildId}/campaigns` },
           {
             label: campaign.name,
-            href: `/account/s/${guildId}/campaigns/${campaign.id}`,
+            href: `/account/c/${campaign.id}`,
           },
           { label: "Memories" },
         ]}

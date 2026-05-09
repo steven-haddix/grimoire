@@ -1,15 +1,24 @@
-import { and, count, eq, inArray } from "drizzle-orm";
+import { format, formatDistanceToNow } from "date-fns";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  max,
+} from "drizzle-orm";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { CreateCampaignDialog } from "@/components/create-campaign-dialog";
+import { Diamond } from "@/components/grimoire/marks";
+import { Pulse } from "@/components/grimoire/primitives";
+import { InstallBotButton } from "@/components/install-bot-button";
+import { Badge } from "@/components/ui/badge";
 import { db } from "@/db";
 import { botGuilds, campaigns, sessions } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
-import { Diamond, Tick } from "@/components/grimoire/marks";
-import { Pulse } from "@/components/grimoire/primitives";
-import { InstallBotButton } from "@/components/install-bot-button";
-import { Badge } from "@/components/ui/badge";
 
 export default async function AccountHome() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -17,43 +26,73 @@ export default async function AccountHome() {
 
   const userGuilds = await getUserAdminGuilds();
   const guildIds = userGuilds.map((g) => g.id);
+  const guildNamesById = new Map(userGuilds.map((g) => [g.id, g.name]));
 
-  // Auto-redirect single-guild users straight into their server scope.
-  if (userGuilds.length === 1) {
-    redirect(`/account/s/${userGuilds[0]!.id}/campaigns`);
+  const allCampaigns =
+    guildIds.length > 0
+      ? await db
+          .select()
+          .from(campaigns)
+          .where(inArray(campaigns.guildId, guildIds))
+          .orderBy(desc(campaigns.updatedAt))
+      : [];
+
+  // Auto-redirect single-campaign users straight into their campaign.
+  if (allCampaigns.length === 1) {
+    redirect(`/account/c/${allCampaigns[0]!.id}`);
   }
 
-  const [installedGuilds, campaignCounts, activeSessions] =
-    guildIds.length > 0
+  const campaignIds = allCampaigns.map((c) => c.id);
+
+  const [
+    activeCampaignSettings,
+    sessionStatsRows,
+    liveSessionRows,
+  ] =
+    campaignIds.length > 0
       ? await Promise.all([
           db
             .select()
             .from(botGuilds)
             .where(inArray(botGuilds.guildId, guildIds)),
           db
-            .select({ guildId: campaigns.guildId, value: count() })
-            .from(campaigns)
-            .where(inArray(campaigns.guildId, guildIds))
-            .groupBy(campaigns.guildId),
+            .select({
+              campaignId: sessions.campaignId,
+              sessionCount: count(),
+              lastPlayed: max(sessions.startedAt),
+            })
+            .from(sessions)
+            .where(inArray(sessions.campaignId, campaignIds))
+            .groupBy(sessions.campaignId),
           db
-            .select({ guildId: sessions.guildId })
+            .select({ campaignId: sessions.campaignId })
             .from(sessions)
             .where(
               and(
-                inArray(sessions.guildId, guildIds),
+                inArray(sessions.campaignId, campaignIds),
                 eq(sessions.status, "active"),
               ),
             ),
         ])
-      : [[], [], []];
+      : [
+          await db
+            .select()
+            .from(botGuilds)
+            .where(inArray(botGuilds.guildId, guildIds)),
+          [],
+          [],
+        ];
 
-  const installedSet = new Set(
-    installedGuilds.filter((g) => g.installed).map((g) => g.guildId),
+  const activeCampaignByGuild = new Map(
+    activeCampaignSettings.map((row) => [row.guildId, row.activeCampaignId]),
   );
-  const campaignsByGuild = new Map(
-    campaignCounts.map((c) => [c.guildId, c.value]),
+  const statsByCampaign = new Map(
+    sessionStatsRows.map((row) => [
+      row.campaignId,
+      { sessionCount: row.sessionCount, lastPlayed: row.lastPlayed },
+    ]),
   );
-  const liveByGuild = new Set(activeSessions.map((s) => s.guildId));
+  const liveCampaignIds = new Set(liveSessionRows.map((r) => r.campaignId));
 
   return (
     <div className="page" style={{ maxWidth: 1100 }}>
@@ -68,37 +107,158 @@ export default async function AccountHome() {
         }}
       >
         <div>
-          <div className="t-eyebrow">Pick a server</div>
+          <div className="t-eyebrow">Pick a campaign</div>
           <h1
             className="t-display"
             style={{ fontSize: 36, marginTop: 6 }}
           >
-            Your <em>servers</em>
+            Your <em>chronicles</em>
           </h1>
         </div>
-        <InstallBotButton>
-          <Diamond size={5} /> Install on a server
-        </InstallBotButton>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <CreateCampaignDialog guilds={userGuilds} />
+          <InstallBotButton variant="ghost">
+            <Diamond size={5} /> Add a server
+          </InstallBotButton>
+        </div>
       </div>
 
-      {userGuilds.length === 0 ? (
-        <EmptyServers />
+      {allCampaigns.length === 0 ? (
+        <EmptyCampaigns hasGuilds={userGuilds.length > 0} />
       ) : (
-        <div className="guild-grid">
-          {userGuilds.map((guild) => {
-            const installed = installedSet.has(guild.id);
-            const live = liveByGuild.has(guild.id);
-            const guildCampaigns = campaignsByGuild.get(guild.id) ?? 0;
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {allCampaigns.map((c) => {
+            const stats = statsByCampaign.get(c.id);
+            const isActive =
+              activeCampaignByGuild.get(c.guildId) === c.id;
+            const isLive = liveCampaignIds.has(c.id);
+            const guildName =
+              guildNamesById.get(c.guildId) ?? "Unknown server";
+            const lastPlayed = stats?.lastPlayed
+              ? formatDistanceToNow(stats.lastPlayed, { addSuffix: true })
+              : "never";
             return (
-              <GuildCard
-                key={guild.id}
-                id={guild.id}
-                name={guild.name}
-                glyph={guild.name.slice(0, 1).toUpperCase()}
-                installed={installed}
-                live={live}
-                campaignCount={guildCampaigns}
-              />
+              <Link
+                key={c.id}
+                href={`/account/c/${c.id}`}
+                className="session-row"
+                style={{
+                  gridTemplateColumns: "80px 1fr 220px auto",
+                  padding: "28px 18px",
+                  textDecoration: "none",
+                  color: "inherit",
+                }}
+              >
+                <div
+                  style={{
+                    width: 64,
+                    height: 64,
+                    border: "0.5px solid var(--rule)",
+                    display: "grid",
+                    placeItems: "center",
+                    fontFamily: "var(--serif)",
+                    fontSize: 30,
+                    color: isActive ? "var(--copper)" : "var(--bone-dim)",
+                    fontVariationSettings: '"opsz" 144',
+                  }}
+                >
+                  {c.name.slice(0, 1).toUpperCase()}
+                </div>
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      marginBottom: 6,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <h2
+                      style={{
+                        fontFamily: "var(--serif)",
+                        fontSize: 26,
+                        margin: 0,
+                        fontWeight: 500,
+                        color: "var(--bone)",
+                        fontVariationSettings: '"opsz" 144',
+                      }}
+                    >
+                      {c.name}
+                    </h2>
+                    {isLive ? (
+                      <Badge variant="live">
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: 99,
+                            background: "var(--ink)",
+                          }}
+                        />{" "}
+                        recording
+                      </Badge>
+                    ) : isActive ? (
+                      <Badge variant="lit">
+                        <Pulse /> active
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div
+                    className="t-meta"
+                    style={{
+                      marginBottom: 8,
+                      color: "var(--bone-dim)",
+                    }}
+                  >
+                    {guildName}
+                  </div>
+                  <p
+                    style={{
+                      color: "var(--bone-dim)",
+                      fontSize: 14,
+                      lineHeight: 1.5,
+                      margin: 0,
+                      maxWidth: 540,
+                    }}
+                  >
+                    {c.description ||
+                      "The story is yet to be written."}
+                  </p>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    paddingTop: 8,
+                  }}
+                >
+                  <span className="t-meta">
+                    <span style={{ color: "var(--bone)" }}>
+                      {stats?.sessionCount ?? 0}
+                    </span>{" "}
+                    sessions logged
+                  </span>
+                  <span className="t-meta">
+                    last played{" "}
+                    <span style={{ color: "var(--bone-dim)" }}>
+                      {lastPlayed}
+                    </span>
+                  </span>
+                  <span className="t-meta" style={{ fontSize: 9 }}>
+                    created {format(c.createdAt, "MMM d, yyyy")}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    alignSelf: "center",
+                    paddingLeft: 16,
+                  }}
+                >
+                  <span className="t-meta t-meta--lit">open →</span>
+                </div>
+              </Link>
             );
           })}
         </div>
@@ -107,149 +267,39 @@ export default async function AccountHome() {
   );
 }
 
-function GuildCard({
-  id,
-  name,
-  glyph,
-  installed,
-  live,
-  campaignCount,
-}: {
-  id: string;
-  name: string;
-  glyph: string;
-  installed: boolean;
-  live: boolean;
-  campaignCount: number;
-}) {
-  const Header = (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-      }}
-    >
-      <span className="guild-card__sigil">{glyph}</span>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          alignItems: "flex-end",
-        }}
-      >
-        {live ? (
-          <Badge variant="lit">
-            <Pulse /> live
-          </Badge>
-        ) : null}
-        {!installed ? <Badge variant="meta">not installed</Badge> : null}
-      </div>
-    </div>
-  );
-
-  const Body = (
-    <div>
-      <div className="guild-card__name">{name}</div>
-      <div className="t-meta" style={{ marginTop: 6 }}>
-        {campaignCount}{" "}
-        {campaignCount === 1 ? "campaign" : "campaigns"}
-        {installed ? " · bot connected" : " · awaiting install"}
-      </div>
-    </div>
-  );
-
-  if (installed) {
-    return (
-      <Link
-        href={`/account/s/${id}/campaigns`}
-        className="guild-card"
-        style={{ textDecoration: "none", display: "flex" }}
-      >
-        {Header}
-        {Body}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 8,
-          }}
-        >
-          <span className="t-meta" style={{ fontSize: 9 }}>
-            /{id}
-          </span>
-          <span className="t-meta t-meta--lit">enter →</span>
-        </div>
-      </Link>
-    );
-  }
-
-  return (
-    <div
-      className="guild-card"
-      style={{ display: "flex", cursor: "default" }}
-    >
-      {Header}
-      {Body}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          marginTop: 8,
-        }}
-      >
-        <span className="t-meta" style={{ fontSize: 9 }}>
-          /{id}
-        </span>
-        <InstallBotButton guildId={id}>
-          <Diamond size={5} /> Install
-        </InstallBotButton>
-      </div>
-    </div>
-  );
-}
-
-function EmptyServers() {
+function EmptyCampaigns({ hasGuilds }: { hasGuilds: boolean }) {
   return (
     <div
       style={{
         border: "0.5px dashed var(--rule)",
-        padding: "48px 32px",
+        padding: "60px 32px",
         textAlign: "center",
         background: "var(--ink-2)",
       }}
     >
-      <div
-        style={{
-          width: 56,
-          height: 56,
-          margin: "0 auto 18px",
-          border: "0.5px solid var(--rule)",
-          display: "grid",
-          placeItems: "center",
-          color: "var(--bone-mute)",
-        }}
+      <h2
+        className="t-display"
+        style={{ fontSize: 32, marginTop: 14, marginBottom: 12 }}
       >
-        <Tick size={20} />
-      </div>
-      <h2 className="t-display" style={{ fontSize: 28, marginBottom: 12 }}>
-        No servers yet
+        Terra Incognita
       </h2>
       <p
         className="t-meta"
-        style={{ maxWidth: 480, margin: "0 auto 24px", lineHeight: 1.6 }}
+        style={{
+          maxWidth: 480,
+          margin: "0 auto 20px",
+          lineHeight: 1.6,
+        }}
       >
-        Grimoire only sees Discord servers where you have Administrator or
-        Manage Guild permissions. If you have those, the server should appear
-        here within a few minutes — or install the bot on a new server now.
+        {hasGuilds
+          ? "No campaigns have been chronicled yet. Start one with the New campaign button — pick the server it belongs to."
+          : "Grimoire only sees Discord servers where you have Administrator or Manage Guild permissions. Install the bot on one of your servers to begin."}
       </p>
-      <InstallBotButton>
-        <Diamond size={5} /> Install on a server
-      </InstallBotButton>
+      {hasGuilds ? null : (
+        <InstallBotButton>
+          <Diamond size={5} /> Install on a server
+        </InstallBotButton>
+      )}
     </div>
   );
 }

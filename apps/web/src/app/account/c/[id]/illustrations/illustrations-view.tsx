@@ -38,12 +38,10 @@ export function IllustrationsView({
   items,
   campaignId,
   campaignName,
-  guildId,
 }: {
   items: Illustration[];
   campaignId: number;
   campaignName: string;
-  guildId: string;
 }) {
   return (
     <>
@@ -134,7 +132,7 @@ export function IllustrationsView({
                   </span>
                   {g.sessionId ? (
                     <Link
-                      href={`/account/s/${guildId}/sessions/${g.sessionId}`}
+                      href={`/account/c/${campaignId}/sessions/${g.sessionId}`}
                       className="t-meta t-meta--lit"
                       style={{ textDecoration: "none" }}
                     >

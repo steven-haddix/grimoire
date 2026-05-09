@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { stripInlineMarkdown } from "@/lib/text/derive";
 
 type Memory = {
   id: number;
@@ -47,7 +48,7 @@ function memoryVariant(category: string) {
 }
 
 function memoryTitle(content: string): string {
-  const trimmed = content.trim();
+  const trimmed = stripInlineMarkdown(content.trim());
   const period = trimmed.indexOf(".");
   const newline = trimmed.indexOf("\n");
   const breakAt =
@@ -63,7 +64,7 @@ function memoryTitle(content: string): string {
 }
 
 function memoryBody(content: string): string | null {
-  const trimmed = content.trim();
+  const trimmed = stripInlineMarkdown(content.trim());
   const title = memoryTitle(content);
   if (trimmed === title) return null;
   return trimmed.slice(title.length).trim();

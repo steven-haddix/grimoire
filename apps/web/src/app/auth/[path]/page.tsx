@@ -1,6 +1,7 @@
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { DiscordSignInButton } from "@/components/auth/discord-sign-in-button";
-import { CompassLarge, Diamond } from "@/components/grimoire/marks";
+import { Diamond } from "@/components/grimoire/marks";
 import { CornerMarks, GridUnderlay } from "@/components/grimoire/primitives";
 
 const allowedPaths = new Set(["sign-in", "sign-up"]);
@@ -33,10 +34,7 @@ export default async function AuthPage({
           transform: "translateX(-50%)",
         }}
       >
-        <span
-          className="t-meta"
-          style={{ letterSpacing: "0.30em" }}
-        >
+        <span className="t-meta" style={{ letterSpacing: "0.30em" }}>
           GRIMOIRE · 2026
         </span>
       </div>
@@ -52,8 +50,25 @@ export default async function AuthPage({
       </div>
 
       <div className="login__center">
-        <div className="login__compass">
-          <CompassLarge size={280} />
+        <div
+          className="login__compass"
+          style={{
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <Image
+            src="/logo.png"
+            alt="Grimoire"
+            width={240}
+            height={240}
+            priority
+            style={{
+              width: 240,
+              height: 240,
+              objectFit: "contain",
+            }}
+          />
         </div>
         <h1 className="login__title">
           {titlePrefix}

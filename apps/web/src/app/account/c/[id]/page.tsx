@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from "date-fns";
-import { and, count, desc, eq, inArray, max } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
@@ -29,35 +29,14 @@ import {
 } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
+import {
+  deriveHook,
+  deriveTitle,
+  firstSentence,
+} from "@/lib/text/derive";
 
 interface CampaignPageProps {
-  params: Promise<{ guildId: string; id: string }>;
-}
-
-function deriveTitle(text: string | undefined): string {
-  if (!text) return "Untitled session";
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  for (const line of lines) {
-    if (line.startsWith("# ")) return line.slice(2).trim();
-  }
-  for (const line of lines) {
-    if (!line.startsWith("#") && line.length > 6) {
-      return line.length > 80 ? `${line.slice(0, 80)}…` : line;
-    }
-  }
-  return "Untitled session";
-}
-
-function deriveHook(text: string | undefined): string | null {
-  if (!text) return null;
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  for (const line of lines) {
-    if (line.startsWith("#") || line.startsWith(">")) continue;
-    if (line.startsWith("-") || line.startsWith("*")) continue;
-    if (line.length < 16) continue;
-    return line.length > 220 ? `${line.slice(0, 220)}…` : line;
-  }
-  return null;
+  params: Promise<{ id: string }>;
 }
 
 function durationLabel(start: Date, end: Date | null) {
@@ -80,30 +59,50 @@ function totalHours(rows: { startedAt: Date; endedAt: Date | null }[]) {
   return ms / 1000 / 60 / 60;
 }
 
+function memoryVariant(category: string): string {
+  if (["lore", "character", "rule", "meta"].includes(category))
+    return category;
+  return "other";
+}
+
+function renderTitleWithEm(name: string) {
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2) return name;
+  let idx = words.length - 1;
+  for (let i = words.length - 1; i >= 0; i--) {
+    const w = words[i];
+    if (w && w.length > 3) {
+      idx = i;
+      break;
+    }
+  }
+  const emWord = words[idx] ?? "";
+  return (
+    <>
+      {words.slice(0, idx).join(" ")}
+      {idx > 0 ? " " : ""}
+      <em>{emWord}</em>
+      {idx < words.length - 1 ? ` ${words.slice(idx + 1).join(" ")}` : ""}
+    </>
+  );
+}
+
 export default async function CampaignDetailPage(props: CampaignPageProps) {
   const params = await props.params;
-  const guildId = params.guildId;
   const campaignId = parseInt(params.id, 10);
   if (Number.isNaN(campaignId)) notFound();
 
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/auth/sign-in");
 
-  const userGuilds = await getUserAdminGuilds();
-  const guild = userGuilds.find((g) => g.id === guildId);
-  if (!guild) notFound();
-
   const campaign = await db.query.campaigns.findFirst({
     where: eq(campaigns.id, campaignId),
   });
   if (!campaign) notFound();
 
-  // Campaign must belong to this server scope
-  if (campaign.guildId !== guildId) {
-    redirect(`/account/s/${campaign.guildId}/campaigns/${campaign.id}`);
-  }
-
-  const guildName = guild.name;
+  const userGuilds = await getUserAdminGuilds();
+  const guild = userGuilds.find((g) => g.id === campaign.guildId);
+  if (!guild) notFound();
 
   const guildSettings = await db.query.botGuilds.findFirst({
     where: eq(botGuilds.guildId, campaign.guildId),
@@ -194,7 +193,6 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
 
   const liveSession = liveSessionRows[0] ?? null;
   const pastSessions = campaignSessions.filter((s) => s.status !== "active");
-
   const latestIllustration = latestIllustrationRows[0] ?? null;
 
   const stats = {
@@ -215,11 +213,6 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
       <Topbar
         crumbs={[
           { label: "GRIMOIRE", href: "/account" },
-          { label: guildName, href: `/account/s/${guildId}/campaigns` },
-          {
-            label: "Campaigns",
-            href: `/account/s/${guildId}/campaigns`,
-          },
           { label: campaign.name },
         ]}
         right={
@@ -234,7 +227,6 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
       <div style={{ position: "relative" }}>
         <GridUnderlay />
         <div className="page" style={{ position: "relative", zIndex: 1 }}>
-          {/* HEADER CARTOUCHE */}
           <Cartouche style={{ marginBottom: 48 }}>
             <div
               style={{
@@ -266,7 +258,7 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                     </Badge>
                   ) : null}
                   <span className="t-meta">
-                    FOLIO {folioNumber} · {guildName}
+                    FOLIO {folioNumber} · {guild.name}
                   </span>
                 </div>
                 <h1
@@ -387,7 +379,6 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
             </div>
           </Cartouche>
 
-          {/* TWO-COL: SESSIONS + RAIL */}
           <div
             style={{
               display: "grid",
@@ -423,7 +414,7 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
 
               {liveSession ? (
                 <Link
-                  href={`/account/s/${guildId}/campaigns/${campaign.id}/live`}
+                  href={`/account/c/${campaign.id}/live`}
                   className="session-row"
                   style={{
                     background:
@@ -533,7 +524,7 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                 return (
                   <Link
                     key={s.id}
-                    href={`/account/s/${guildId}/sessions/${s.id}`}
+                    href={`/account/c/${campaign.id}/sessions/${s.id}`}
                     className="session-row"
                     style={{
                       textDecoration: "none",
@@ -642,7 +633,6 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
               ) : null}
             </div>
 
-            {/* RAIL */}
             <aside>
               <div
                 style={{
@@ -657,7 +647,7 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                   title="Latest illustration"
                   link={
                     <Link
-                      href={`/account/s/${guildId}/campaigns/${campaign.id}/illustrations`}
+                      href={`/account/c/${campaign.id}/illustrations`}
                       className="t-meta t-meta--lit"
                       style={{ textDecoration: "none" }}
                     >
@@ -667,7 +657,7 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                 >
                   {latestIllustration ? (
                     <Link
-                      href={`/account/s/${guildId}/campaigns/${campaign.id}/illustrations`}
+                      href={`/account/c/${campaign.id}/illustrations`}
                       style={{
                         display: "block",
                         position: "relative",
@@ -703,7 +693,14 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                         marginBottom: 8,
                       }}
                     >
-                      <span className="t-meta" style={{ fontSize: 9.5, textAlign: "center", padding: "0 16px" }}>
+                      <span
+                        className="t-meta"
+                        style={{
+                          fontSize: 9.5,
+                          textAlign: "center",
+                          padding: "0 16px",
+                        }}
+                      >
                         no scenes painted yet
                       </span>
                     </div>
@@ -711,7 +708,10 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                   <div className="t-meta" style={{ marginBottom: 12 }}>
                     {latestIllustration?.caption ?? null}
                   </div>
-                  <CreateIllustrationDialog campaignId={campaign.id} size="sm">
+                  <CreateIllustrationDialog
+                    campaignId={campaign.id}
+                    size="sm"
+                  >
                     Conjure new scene
                   </CreateIllustrationDialog>
                 </RailSection>
@@ -721,7 +721,7 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                     title="Latest summary"
                     link={
                       <Link
-                        href={`/account/s/${guildId}/sessions/${latestSummaryByDate.sessionId}`}
+                        href={`/account/c/${campaign.id}/sessions/${latestSummaryByDate.sessionId}`}
                         className="t-meta t-meta--lit"
                         style={{ textDecoration: "none" }}
                       >
@@ -753,9 +753,10 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                     </p>
                     <div className="t-meta" style={{ marginTop: 10 }}>
                       Generated{" "}
-                      {formatDistanceToNow(latestSummaryByDate.createdAt, {
-                        addSuffix: true,
-                      })}
+                      {formatDistanceToNow(
+                        latestSummaryByDate.createdAt,
+                        { addSuffix: true },
+                      )}
                     </div>
                   </RailSection>
                 ) : null}
@@ -765,7 +766,7 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                     title="Recent memories"
                     link={
                       <Link
-                        href={`/account/s/${guildId}/campaigns/${campaign.id}/memories`}
+                        href={`/account/c/${campaign.id}/memories`}
                         className="t-meta t-meta--lit"
                         style={{ textDecoration: "none" }}
                       >
@@ -826,6 +827,11 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
 
                 <RailSection title="Bot status">
                   <StatusLine
+                    label="Server"
+                    value={guild.name}
+                    lit
+                  />
+                  <StatusLine
                     label="Active campaign"
                     value={isActive ? "this one" : "another"}
                     lit={isActive}
@@ -839,7 +845,9 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
                     label="Last played"
                     value={
                       lastPlayed
-                        ? formatDistanceToNow(lastPlayed, { addSuffix: true })
+                        ? formatDistanceToNow(lastPlayed, {
+                            addSuffix: true,
+                          })
                         : "never"
                     }
                   />
@@ -858,46 +866,6 @@ export default async function CampaignDetailPage(props: CampaignPageProps) {
           </div>
         </div>
       </div>
-    </>
-  );
-}
-
-function memoryVariant(category: string): string {
-  if (["lore", "character", "rule", "meta"].includes(category))
-    return category;
-  return "other";
-}
-
-function firstSentence(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed.length <= 80) return trimmed;
-  const cut = trimmed.slice(0, 80);
-  const period = cut.lastIndexOf(".");
-  if (period > 30) return `${cut.slice(0, period + 1)}`;
-  return `${cut}…`;
-}
-
-// Heuristic: italicize a word in the campaign title if it has 2+ words,
-// to recreate the design's "The _Long_ Thaw" effect. Otherwise return as-is.
-function renderTitleWithEm(name: string) {
-  const words = name.trim().split(/\s+/);
-  if (words.length < 2) return name;
-  // pick the last word that isn't tiny
-  let idx = words.length - 1;
-  for (let i = words.length - 1; i >= 0; i--) {
-    const w = words[i];
-    if (w && w.length > 3) {
-      idx = i;
-      break;
-    }
-  }
-  const emWord = words[idx] ?? "";
-  return (
-    <>
-      {words.slice(0, idx).join(" ")}
-      {idx > 0 ? " " : ""}
-      <em>{emWord}</em>
-      {idx < words.length - 1 ? ` ${words.slice(idx + 1).join(" ")}` : ""}
     </>
   );
 }

@@ -32,22 +32,14 @@ export default function Home() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span
-            style={{
-              width: 28,
-              height: 28,
-              border: "0.5px solid var(--copper-dim)",
-              display: "grid",
-              placeItems: "center",
-              color: "var(--copper)",
-              fontFamily: "var(--serif)",
-              fontSize: 14,
-              fontStyle: "italic",
-              fontVariationSettings: '"opsz" 144',
-            }}
-          >
-            G
-          </span>
+          <Image
+            src="/logo.png"
+            alt="Grimoire"
+            width={32}
+            height={32}
+            priority
+            style={{ width: 32, height: 32, objectFit: "contain" }}
+          />
           <span
             className="t-display"
             style={{ fontSize: 22, fontWeight: 500 }}
@@ -171,26 +163,22 @@ export default function Home() {
 
           <div
             style={{
-              position: "relative",
               display: "grid",
               placeItems: "center",
               minHeight: 360,
             }}
           >
-            <div style={{ position: "relative", color: "var(--copper)" }}>
-              <Rosette size={420} />
-            </div>
-            <div
+            <Image
+              src="/logo.png"
+              alt="Grimoire"
+              width={420}
+              height={420}
+              priority
               style={{
-                position: "absolute",
-                inset: 0,
-                display: "grid",
-                placeItems: "center",
-                color: "var(--bone-dim)",
+                width: "min(420px, 80vw)",
+                height: "auto",
               }}
-            >
-              <Compass size={140} />
-            </div>
+            />
           </div>
         </section>
 

@@ -16,6 +16,7 @@ export default async function SessionRedirect(props: SessionRedirectProps) {
     where: eq(sessions.id, sessionId),
   });
   if (!session) notFound();
+  if (!session.campaignId) notFound();
 
-  redirect(`/account/s/${session.guildId}/sessions/${session.id}`);
+  redirect(`/account/c/${session.campaignId}/sessions/${session.id}`);
 }

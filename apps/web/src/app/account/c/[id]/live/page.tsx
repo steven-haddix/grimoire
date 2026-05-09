@@ -16,31 +16,25 @@ import { getUserAdminGuilds } from "@/lib/discord/server";
 import { LiveTranscript } from "./live-transcript";
 
 interface LivePageProps {
-  params: Promise<{ guildId: string; id: string }>;
+  params: Promise<{ id: string }>;
 }
 
 export default async function LivePage(props: LivePageProps) {
   const params = await props.params;
-  const guildId = params.guildId;
   const campaignId = parseInt(params.id, 10);
   if (Number.isNaN(campaignId)) notFound();
 
   const authSession = await auth.api.getSession({ headers: await headers() });
   if (!authSession) redirect("/auth/sign-in");
 
-  const userGuilds = await getUserAdminGuilds();
-  const guild = userGuilds.find((g) => g.id === guildId);
-  if (!guild) notFound();
-
   const campaign = await db.query.campaigns.findFirst({
     where: eq(campaigns.id, campaignId),
   });
   if (!campaign) notFound();
-  if (campaign.guildId !== guildId) {
-    redirect(`/account/s/${campaign.guildId}/campaigns/${campaign.id}/live`);
-  }
 
-  const guildName = guild.name;
+  const userGuilds = await getUserAdminGuilds();
+  const guild = userGuilds.find((g) => g.id === campaign.guildId);
+  if (!guild) notFound();
 
   const liveSession = await db.query.sessions.findFirst({
     where: and(
@@ -55,11 +49,7 @@ export default async function LivePage(props: LivePageProps) {
         <Topbar
           crumbs={[
             { label: "GRIMOIRE", href: "/account" },
-            { label: guildName, href: `/account/s/${guildId}/campaigns` },
-            {
-              label: campaign.name,
-              href: `/account/s/${guildId}/campaigns/${campaign.id}`,
-            },
+            { label: campaign.name, href: `/account/c/${campaign.id}` },
             { label: "Live" },
           ]}
         />
@@ -94,7 +84,7 @@ export default async function LivePage(props: LivePageProps) {
               in your Discord voice channel to begin one.
             </p>
             <Link
-              href={`/account/s/${guildId}/campaigns/${campaign.id}`}
+              href={`/account/c/${campaign.id}`}
               className="t-meta t-meta--lit"
               style={{
                 display: "inline-block",
@@ -133,11 +123,7 @@ export default async function LivePage(props: LivePageProps) {
       <Topbar
         crumbs={[
           { label: "GRIMOIRE", href: "/account" },
-          { label: guildName, href: `/account/s/${guildId}/campaigns` },
-          {
-            label: campaign.name,
-            href: `/account/s/${guildId}/campaigns/${campaign.id}`,
-          },
+          { label: campaign.name, href: `/account/c/${campaign.id}` },
           { label: `Live · #${liveSession.id}` },
         ]}
         right={
@@ -204,7 +190,11 @@ export default async function LivePage(props: LivePageProps) {
                 </div>
                 <article
                   className="prose-grim"
-                  style={{ fontSize: 14, color: "var(--bone-dim)", maxWidth: 720 }}
+                  style={{
+                    fontSize: 14,
+                    color: "var(--bone-dim)",
+                    maxWidth: 720,
+                  }}
                 >
                   {latestSummary.text.slice(0, 800)}
                   {latestSummary.text.length > 800 ? "…" : ""}
@@ -225,7 +215,7 @@ export default async function LivePage(props: LivePageProps) {
                   no speech captured yet
                 </div>
               ) : (
-                speakers.map((s, i) => {
+                speakers.map((s) => {
                   const speaking = lastLine?.speaker === s;
                   return (
                     <div
@@ -276,9 +266,7 @@ export default async function LivePage(props: LivePageProps) {
                           {speaking ? "spoke last" : "in transcript"}
                         </div>
                       </div>
-                      {speaking ? (
-                        <Wave height={18} bars={4} />
-                      ) : null}
+                      {speaking ? <Wave height={18} bars={4} /> : null}
                     </div>
                   );
                 })
@@ -287,20 +275,19 @@ export default async function LivePage(props: LivePageProps) {
 
             <RailSection title="Session info">
               <StatusLine
-                label="Channel"
-                value={liveSession.channelId}
+                label="Server"
+                value={guild.name}
                 lit
               />
               <StatusLine
-                label="Started"
-                value={
-                  <LocalTime timestamp={liveSession.startedAt} />
-                }
+                label="Channel"
+                value={liveSession.channelId}
               />
               <StatusLine
-                label="Lines"
-                value={lines.length.toString()}
+                label="Started"
+                value={<LocalTime timestamp={liveSession.startedAt} />}
               />
+              <StatusLine label="Lines" value={lines.length.toString()} />
               <StatusLine
                 label="Speakers"
                 value={speakers.length.toString()}
@@ -310,13 +297,19 @@ export default async function LivePage(props: LivePageProps) {
             <div className="t-meta" style={{ lineHeight: 1.6 }}>
               The bot will write a final summary into{" "}
               <Link
-                href={`/account/s/${guildId}/sessions/${liveSession.id}`}
+                href={`/account/c/${campaign.id}/sessions/${liveSession.id}`}
                 className="t-meta t-meta--lit"
                 style={{ textDecoration: "none" }}
               >
                 session #{liveSession.id}
               </Link>{" "}
-              when you call <code style={{ color: "var(--copper)", fontFamily: "var(--mono)" }}>/grim stop</code>.
+              when you call{" "}
+              <code
+                style={{ color: "var(--copper)", fontFamily: "var(--mono)" }}
+              >
+                /grim stop
+              </code>
+              .
             </div>
           </aside>
         </div>

@@ -5,6 +5,10 @@ import * as React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
+import {
+  firstSentence,
+  remainderAfterFirstSentence,
+} from "@/lib/text/derive";
 
 type Tab = "summary" | "transcript" | "memories" | "illustrations";
 
@@ -374,7 +378,9 @@ function CapturedMemoriesTab({ memories }: { memories: CapturedMemory[] }) {
               <span className="mem__title">{firstSentence(m.content)}</span>
               <Badge variant={memoryVariant(m.category)}>{m.category}</Badge>
             </div>
-            <div className="mem__body">{remainder(m.content)}</div>
+            <div className="mem__body">
+              {remainderAfterFirstSentence(m.content)}
+            </div>
             <div className="mem__foot">
               <span className="t-meta">
                 captured {format(m.createdAt, "MMM d, yyyy")}
@@ -388,15 +394,3 @@ function CapturedMemoriesTab({ memories }: { memories: CapturedMemory[] }) {
   );
 }
 
-function firstSentence(text: string): string {
-  const trimmed = text.trim();
-  const period = trimmed.indexOf(".");
-  if (period > 12 && period < 100) return trimmed.slice(0, period + 1);
-  return trimmed.length > 100 ? `${trimmed.slice(0, 100)}…` : trimmed;
-}
-
-function remainder(text: string): string {
-  const trimmed = text.trim();
-  const first = firstSentence(text);
-  return trimmed === first ? "" : trimmed.slice(first.length).trim();
-}

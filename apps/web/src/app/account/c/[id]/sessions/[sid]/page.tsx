@@ -16,10 +16,11 @@ import {
 } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
+import { deriveHook, deriveTitle } from "@/lib/text/derive";
 import { SessionDetail } from "./session-detail";
 
 interface SessionPageProps {
-  params: Promise<{ guildId: string; id: string }>;
+  params: Promise<{ id: string; sid: string }>;
 }
 
 function durationLabel(start: Date, end: Date | null) {
@@ -34,60 +35,37 @@ function durationLabel(start: Date, end: Date | null) {
     : `${hours}h ${rem.toString().padStart(2, "0")}m`;
 }
 
-function deriveTitle(text: string | undefined): string {
-  if (!text) return "Untitled session";
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  for (const line of lines) {
-    if (line.startsWith("# ")) return line.slice(2).trim();
-  }
-  for (const line of lines) {
-    if (!line.startsWith("#") && line.length > 6) {
-      return line.length > 80 ? `${line.slice(0, 80)}…` : line;
-    }
-  }
-  return "Untitled session";
-}
-
-function deriveHook(text: string | undefined): string | null {
-  if (!text) return null;
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  for (const line of lines) {
-    if (line.startsWith("#") || line.startsWith(">")) continue;
-    if (line.startsWith("-") || line.startsWith("*")) continue;
-    if (line.length < 16) continue;
-    return line.length > 280 ? `${line.slice(0, 280)}…` : line;
-  }
-  return null;
-}
-
 export default async function SessionPage(props: SessionPageProps) {
   const params = await props.params;
-  const guildId = params.guildId;
-  const sessionId = parseInt(params.id, 10);
-  if (Number.isNaN(sessionId)) notFound();
+  const campaignId = parseInt(params.id, 10);
+  const sessionId = parseInt(params.sid, 10);
+  if (Number.isNaN(campaignId) || Number.isNaN(sessionId)) notFound();
 
   const authSession = await auth.api.getSession({ headers: await headers() });
   if (!authSession) redirect("/auth/sign-in");
 
+  const campaign = await db.query.campaigns.findFirst({
+    where: eq(campaigns.id, campaignId),
+  });
+  if (!campaign) notFound();
+
   const userGuilds = await getUserAdminGuilds();
-  const guild = userGuilds.find((g) => g.id === guildId);
-  if (!guild) notFound();
+  if (!userGuilds.some((g) => g.id === campaign.guildId)) notFound();
 
   const session = await db.query.sessions.findFirst({
     where: eq(sessions.id, sessionId),
   });
   if (!session) notFound();
-  if (session.guildId !== guildId) {
-    redirect(`/account/s/${session.guildId}/sessions/${session.id}`);
+
+  // Session must belong to this campaign — otherwise redirect to canonical
+  if (session.campaignId !== campaignId) {
+    if (session.campaignId) {
+      redirect(
+        `/account/c/${session.campaignId}/sessions/${session.id}`,
+      );
+    }
+    notFound();
   }
-
-  const campaign = session.campaignId
-    ? await db.query.campaigns.findFirst({
-        where: eq(campaigns.id, session.campaignId),
-      })
-    : null;
-
-  const guildName = guild.name;
 
   const [
     sessionSummaries,
@@ -105,13 +83,11 @@ export default async function SessionPage(props: SessionPageProps) {
       .from(transcripts)
       .where(eq(transcripts.sessionId, sessionId))
       .orderBy(asc(transcripts.timestamp)),
-    session.campaignId
-      ? db
-          .select()
-          .from(memories)
-          .where(eq(memories.campaignId, session.campaignId))
-          .orderBy(desc(memories.createdAt))
-      : Promise.resolve([] as Array<typeof memories.$inferSelect>),
+    db
+      .select()
+      .from(memories)
+      .where(eq(memories.campaignId, campaignId))
+      .orderBy(desc(memories.createdAt)),
     db
       .select({
         id: illustrations.id,
@@ -127,7 +103,7 @@ export default async function SessionPage(props: SessionPageProps) {
 
   const latestSummary = sessionSummaries[0];
   const title = deriveTitle(latestSummary?.text);
-  const hook = deriveHook(latestSummary?.text);
+  const hook = deriveHook(latestSummary?.text, 280);
 
   const speakerSet = new Set(sessionTranscripts.map((t) => t.speaker));
 
@@ -136,16 +112,10 @@ export default async function SessionPage(props: SessionPageProps) {
       <Topbar
         crumbs={[
           { label: "GRIMOIRE", href: "/account" },
-          { label: guildName, href: `/account/s/${guildId}/campaigns` },
-          campaign
-            ? {
-                label: campaign.name,
-                href: `/account/s/${guildId}/campaigns/${campaign.id}`,
-              }
-            : {
-                label: "Sessions",
-                href: `/account/s/${guildId}/sessions`,
-              },
+          {
+            label: campaign.name,
+            href: `/account/c/${campaign.id}`,
+          },
           { label: `Session #${session.id}` },
         ]}
       />
@@ -254,18 +224,14 @@ export default async function SessionPage(props: SessionPageProps) {
         >
           <Asterism />
           <span className="t-meta">end of session</span>
-          {campaign ? (
-            <>
-              <span className="t-meta">·</span>
-              <Link
-                href={`/account/s/${guildId}/campaigns/${campaign.id}`}
-                className="t-meta t-meta--lit"
-                style={{ textDecoration: "none" }}
-              >
-                back to {campaign.name} →
-              </Link>
-            </>
-          ) : null}
+          <span className="t-meta">·</span>
+          <Link
+            href={`/account/c/${campaign.id}`}
+            className="t-meta t-meta--lit"
+            style={{ textDecoration: "none" }}
+          >
+            back to {campaign.name} →
+          </Link>
         </div>
       </div>
     </>

@@ -83,7 +83,7 @@ export function CampaignActions({
         >
           <DropdownMenuItem asChild>
             <Link
-              href={`/account/s/${guildId}/campaigns/${campaign.id}`}
+              href={`/account/c/${campaign.id}`}
               className="gap-2 cursor-pointer w-full flex items-center"
             >
               <Eye className="h-4 w-4" />

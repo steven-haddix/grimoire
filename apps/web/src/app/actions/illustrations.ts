@@ -200,10 +200,8 @@ export async function createIllustration(formData: FormData) {
     })
     .returning();
 
-  revalidatePath(
-    `/account/s/${campaign.guildId}/campaigns/${campaignId}/illustrations`,
-  );
-  revalidatePath(`/account/s/${campaign.guildId}/campaigns/${campaignId}`);
+  revalidatePath(`/account/c/${campaignId}/illustrations`);
+  revalidatePath(`/account/c/${campaignId}`);
 
   return {
     id: row?.id,
@@ -215,7 +213,7 @@ export async function deleteIllustration(
   illustrationId: number,
   campaignId: number,
 ) {
-  const campaign = await assertCampaignAccess(campaignId);
+  await assertCampaignAccess(campaignId);
   await db
     .delete(illustrations)
     .where(
@@ -224,8 +222,6 @@ export async function deleteIllustration(
         eq(illustrations.campaignId, campaignId),
       ),
     );
-  revalidatePath(
-    `/account/s/${campaign.guildId}/campaigns/${campaignId}/illustrations`,
-  );
-  revalidatePath(`/account/s/${campaign.guildId}/campaigns/${campaignId}`);
+  revalidatePath(`/account/c/${campaignId}/illustrations`);
+  revalidatePath(`/account/c/${campaignId}`);
 }

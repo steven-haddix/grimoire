@@ -11,7 +11,11 @@ import {
 } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
-import { SideNav, type GuildContext, type LibraryCounts } from "./side-nav";
+import {
+  SideNav,
+  type CampaignNavEntry,
+  type LibraryCounts,
+} from "./side-nav";
 
 export default async function AccountLayout({
   children,
@@ -23,13 +27,12 @@ export default async function AccountLayout({
 
   const userGuilds = await getUserAdminGuilds();
   const guildIds = userGuilds.map((g) => g.id);
+  const guildNamesById = new Map(userGuilds.map((g) => [g.id, g.name]));
 
   const [
     allCampaigns,
-    perGuildCampaignCounts,
-    perGuildSessionCounts,
-    perGuildMemoryCounts,
     activeCampaignSettings,
+    perCampaignSessionCounts,
     perCampaignMemoryCounts,
     perCampaignIllustrationCounts,
   ] =
@@ -46,25 +49,18 @@ export default async function AccountLayout({
             .where(inArray(campaigns.guildId, guildIds))
             .orderBy(desc(campaigns.updatedAt)),
           db
-            .select({ guildId: campaigns.guildId, value: count() })
-            .from(campaigns)
-            .where(inArray(campaigns.guildId, guildIds))
-            .groupBy(campaigns.guildId),
-          db
-            .select({ guildId: sessions.guildId, value: count() })
-            .from(sessions)
-            .where(inArray(sessions.guildId, guildIds))
-            .groupBy(sessions.guildId),
-          db
-            .select({ guildId: campaigns.guildId, value: count() })
-            .from(memories)
-            .innerJoin(campaigns, eq(memories.campaignId, campaigns.id))
-            .where(inArray(campaigns.guildId, guildIds))
-            .groupBy(campaigns.guildId),
-          db
             .select()
             .from(botGuilds)
             .where(inArray(botGuilds.guildId, guildIds)),
+          db
+            .select({
+              campaignId: sessions.campaignId,
+              value: count(),
+            })
+            .from(sessions)
+            .innerJoin(campaigns, eq(sessions.campaignId, campaigns.id))
+            .where(inArray(campaigns.guildId, guildIds))
+            .groupBy(sessions.campaignId),
           db
             .select({
               campaignId: memories.campaignId,
@@ -87,61 +83,40 @@ export default async function AccountLayout({
             .where(inArray(campaigns.guildId, guildIds))
             .groupBy(illustrations.campaignId),
         ])
-      : [[], [], [], [], [], [], []];
+      : [[], [], [], [], []];
 
-  const guildContexts: GuildContext[] = userGuilds.map((g) => ({
-    id: g.id,
-    name: g.name,
-    glyph: g.name.slice(0, 1).toUpperCase(),
-  }));
-
-  const campaignsByGuildCount = new Map(
-    perGuildCampaignCounts.map((row) => [row.guildId, row.value]),
-  );
-  const sessionsByGuildCount = new Map(
-    perGuildSessionCounts.map((row) => [row.guildId, row.value]),
-  );
-  const memoriesByGuildCount = new Map(
-    perGuildMemoryCounts.map((row) => [row.guildId, row.value]),
-  );
-  const memoriesByCampaignCount = new Map(
-    perCampaignMemoryCounts.map((row) => [row.campaignId, row.value]),
-  );
   const activeCampaignByGuild = new Map(
     activeCampaignSettings.map((row) => [row.guildId, row.activeCampaignId]),
   );
 
-  const totalCampaigns = allCampaigns.length;
-  const totalSessions = Array.from(sessionsByGuildCount.values()).reduce(
-    (a, b) => a + b,
-    0,
+  const sessionsByCampaignCount = new Map(
+    perCampaignSessionCounts.map((row) => [row.campaignId, row.value]),
   );
-  const totalMemories = Array.from(memoriesByGuildCount.values()).reduce(
-    (a, b) => a + b,
-    0,
+  const memoriesByCampaignCount = new Map(
+    perCampaignMemoryCounts.map((row) => [row.campaignId, row.value]),
+  );
+  const illustrationsByCampaignCount = new Map(
+    perCampaignIllustrationCounts.map((row) => [row.campaignId, row.value]),
   );
 
+  const campaignEntries: CampaignNavEntry[] = allCampaigns.map((c) => ({
+    id: c.id,
+    name: c.name,
+    guildId: c.guildId,
+    guildName: guildNamesById.get(c.guildId) ?? "Unknown server",
+    isActive: activeCampaignByGuild.get(c.guildId) === c.id,
+    sessionCount: sessionsByCampaignCount.get(c.id) ?? 0,
+  }));
+
   const counts: LibraryCounts = {
-    cross: {
-      campaigns: totalCampaigns,
-      sessions: totalSessions,
-      memories: totalMemories,
-    },
-    perGuild: Object.fromEntries(
-      guildIds.map((gid) => [
-        gid,
-        {
-          campaigns: campaignsByGuildCount.get(gid) ?? 0,
-          sessions: sessionsByGuildCount.get(gid) ?? 0,
-          memories: memoriesByGuildCount.get(gid) ?? 0,
-        },
-      ]),
-    ),
     perCampaignMemories: Object.fromEntries(
       Array.from(memoriesByCampaignCount.entries()),
     ),
     perCampaignIllustrations: Object.fromEntries(
-      perCampaignIllustrationCounts.map((row) => [row.campaignId, row.value]),
+      Array.from(illustrationsByCampaignCount.entries()),
+    ),
+    perCampaignSessions: Object.fromEntries(
+      Array.from(sessionsByCampaignCount.entries()),
     ),
   };
 
@@ -161,14 +136,7 @@ export default async function AccountLayout({
           initial: userInitial,
           email: session.user?.email ?? null,
         }}
-        guilds={guildContexts}
-        campaigns={allCampaigns.map((c) => ({
-          id: c.id,
-          name: c.name,
-          guildId: c.guildId,
-          isActive:
-            activeCampaignByGuild.get(c.guildId) === c.id,
-        }))}
+        campaigns={campaignEntries}
         counts={counts}
       />
       <main className="app__main">{children}</main>
