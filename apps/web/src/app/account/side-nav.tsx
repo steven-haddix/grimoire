@@ -156,6 +156,11 @@ export function SideNav({ user, campaigns, counts }: SideNavProps) {
             matchExact: true,
           })}
           {renderNavItem({
+            href: `/account/c/${activeCampaign.id}/sessions`,
+            label: "Sessions",
+            count: counts.perCampaignSessions[activeCampaign.id] ?? 0,
+          })}
+          {renderNavItem({
             href: `/account/c/${activeCampaign.id}/memories`,
             label: "Memories",
             count: counts.perCampaignMemories[activeCampaign.id] ?? 0,
