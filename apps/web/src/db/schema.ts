@@ -1,18 +1,28 @@
-import { relations } from "drizzle-orm";
+import { relations, type SQL, sql } from "drizzle-orm";
 import {
   boolean,
   customType,
+  index,
   integer,
   pgTable,
   serial,
   text,
   timestamp,
+  vector,
 } from "drizzle-orm/pg-core";
 
 // Postgres bytea — stored as a Node Buffer in TS land.
 const bytea = customType<{ data: Buffer; default: false }>({
   dataType() {
     return "bytea";
+  },
+});
+
+// Postgres tsvector for full-text search. Populated by a generated column, so
+// we never write to it directly from application code.
+const tsvector = customType<{ data: string; default: false }>({
+  dataType() {
+    return "tsvector";
   },
 });
 
@@ -118,11 +128,64 @@ export const illustrations = pgTable("illustrations", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Dimensionality of OpenAI `text-embedding-3-small` vectors. Kept here so the
+// schema and the embedding helper can never drift apart.
+export const EMBEDDING_DIMENSIONS = 1536;
+
+export type SearchableChunkSource = "summary" | "transcript" | "memory";
+
+// Unified retrieval index for campaign history. Each row is a small, embeddable
+// chunk of text (a session summary, a slice of a transcript, or a memory) plus
+// a vector embedding and a full-text search vector. The Discord agent searches
+// this table to recall details from sessions far outside its recent-context
+// window. `embedding` is nullable so rows survive even if embedding generation
+// fails — keyword search still works in that case.
+export const searchableChunks = pgTable(
+  "searchable_chunks",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    sessionId: integer("session_id").references(() => sessions.id, {
+      onDelete: "cascade",
+    }),
+    // "summary" | "transcript" | "memory"
+    sourceType: text("source_type").notNull(),
+    // id of the originating summary/memory row, or the session id for transcript
+    // chunks. Used to make re-indexing idempotent.
+    sourceId: integer("source_id"),
+    // position of this chunk within its source (0 for single-chunk sources).
+    chunkIndex: integer("chunk_index").notNull().default(0),
+    speaker: text("speaker"),
+    content: text("content").notNull(),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }),
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      (): SQL => sql`to_tsvector('english', "content")`,
+    ),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("searchable_chunks_campaign_idx").on(table.campaignId),
+    index("searchable_chunks_session_idx").on(table.sessionId),
+    index("searchable_chunks_source_idx").on(table.sourceType, table.sourceId),
+    index("searchable_chunks_embedding_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops"),
+    ),
+    index("searchable_chunks_search_vector_idx").using(
+      "gin",
+      table.searchVector,
+    ),
+  ],
+);
+
 export const campaignsRelations = relations(campaigns, ({ many }) => ({
   sessions: many(sessions),
   memories: many(memories),
   chatMessages: many(chatMessages),
   illustrations: many(illustrations),
+  searchableChunks: many(searchableChunks),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
@@ -179,5 +242,19 @@ export const illustrationsRelations = relations(illustrations, ({ one }) => ({
     references: [sessions.id],
   }),
 }));
+
+export const searchableChunksRelations = relations(
+  searchableChunks,
+  ({ one }) => ({
+    campaign: one(campaigns, {
+      fields: [searchableChunks.campaignId],
+      references: [campaigns.id],
+    }),
+    session: one(sessions, {
+      fields: [searchableChunks.sessionId],
+      references: [sessions.id],
+    }),
+  }),
+);
 
 export * from "./better-auth-schema";

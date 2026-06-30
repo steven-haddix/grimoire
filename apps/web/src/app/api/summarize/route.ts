@@ -4,6 +4,7 @@ import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { campaigns, sessions, summaries, transcripts } from "@/db/schema";
+import { indexSession } from "@/lib/search/indexer";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -115,6 +116,10 @@ export async function POST(req: Request) {
     .update(sessions)
     .set({ status: "completed", endedAt: new Date() })
     .where(eq(sessions.id, sessionId));
+
+  // Index this session's summary + transcripts for long-term campaign search.
+  // Best-effort — indexSession never throws, so it can't fail the request.
+  await indexSession(sessionId);
 
   return NextResponse.json({ success: true, summary: text });
 }

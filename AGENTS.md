@@ -16,6 +16,7 @@ The “source of truth” is the database in `apps/web`:
 - `sessions`: lifecycle/status for each recording session
 - `transcripts`: ordered lines (speaker + content + timestamp)
 - `summaries`: final recap text for a session
+- `searchable_chunks`: campaign-scoped retrieval index (embeddings + full-text) that powers the agent's `searchCampaignHistory` tool
 
 ## Repo layout
 
@@ -96,6 +97,27 @@ If you switch models/providers (Google/OpenAI/etc), update:
 - provider code and env var usage
 - `apps/web/.env.example`
 - any deployment docs in `README.md`
+
+## Campaign history search (RAG)
+
+The Discord agent can recall details from any past session via the
+`searchCampaignHistory` tool, backed by `searchable_chunks` and the code in
+`apps/web/src/lib/search/`:
+- `embeddings.ts`: OpenAI `text-embedding-3-small` (1536-dim) helpers; return
+  `null` instead of throwing when `OPENAI_API_KEY` is unset so search degrades to
+  keyword-only.
+- `indexer.ts`: best-effort writers — `indexSession` (called from
+  `/api/summarize`) and `indexMemory` (called from the `rememberFact` tool).
+  Both are idempotent.
+- `search.ts`: hybrid retrieval — pgvector cosine + Postgres full-text, fused
+  with Reciprocal Rank Fusion.
+
+Operational notes:
+- The `0008` migration runs `CREATE EXTENSION IF NOT EXISTS vector`, so apply it
+  with `bun db:migrate` (a plain `db:push` cannot create the extension or the
+  HNSW/GIN indexes).
+- Backfill existing data with `bun apps/web/scripts/backfill-search-index.ts`.
+- Design notes: `docs/plans/2026-06-30-campaign-search-design.md`.
 
 ## Engineering conventions (stay consistent)
 
