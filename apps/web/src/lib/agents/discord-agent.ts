@@ -1,6 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { stepCountIs, ToolLoopAgent, tool } from "ai";
 import { desc, eq } from "drizzle-orm";
+import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -538,14 +539,20 @@ function createDiscordAgent(params: {
             })
             .returning();
 
-          // Make the new fact searchable right away. Best-effort — indexMemory
-          // never throws, so a failed embedding can't break remembering.
+          // Make the new fact searchable, but defer the embedding write until
+          // after the response flushes (via `after`) so "remember that…" never
+          // stalls the Discord reply on an embedding round-trip. Best-effort —
+          // indexMemory never throws.
           if (inserted) {
-            await indexMemory({
-              id: inserted.id,
-              campaignId: activeCampaignId,
-              content: content.trim(),
-            });
+            const memoryId = inserted.id;
+            const memoryContent = content.trim();
+            after(() =>
+              indexMemory({
+                id: memoryId,
+                campaignId: activeCampaignId,
+                content: memoryContent,
+              }),
+            );
           }
           return { ok: true };
         },

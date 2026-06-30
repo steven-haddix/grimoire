@@ -14,6 +14,7 @@ import {
   sessions,
 } from "@/db/schema";
 import { embedText } from "./embeddings";
+import { fuse } from "./fusion";
 
 export type CampaignSearchResult = {
   sourceType: SearchableChunkSource;
@@ -30,9 +31,6 @@ const MAX_LIMIT = 20;
 // Pull extra candidates from each modality before fusing, so a result ranked
 // highly by only one method still has a chance to surface.
 const CANDIDATE_MULTIPLIER = 3;
-// Reciprocal Rank Fusion constant. 60 is the value from the original RRF paper
-// and is a sane default that keeps any single rank from dominating.
-const RRF_K = 60;
 
 type RankedRow = {
   id: number;
@@ -94,6 +92,10 @@ async function semanticSearch(
   const embedding = await embedText(query);
   if (!embedding) return [];
 
+  // Note: pgvector post-filters HNSW results against the WHERE clause, so with
+  // many campaigns and the default `hnsw.ef_search` this can return fewer than
+  // `limit` rows. Fine at current scale; raise `ef_search` (or add a partial
+  // index per campaign) if recall degrades.
   const distance = cosineDistance(searchableChunks.embedding, embedding);
 
   return db
@@ -140,28 +142,6 @@ async function keywordSearch(
     )
     .orderBy(desc(rank))
     .limit(limit);
-}
-
-/** Merge ranked result lists with Reciprocal Rank Fusion. */
-function fuse(
-  rankings: RankedRow[][],
-  limit: number,
-): Array<{ row: RankedRow; score: number }> {
-  const scores = new Map<number, { row: RankedRow; score: number }>();
-
-  for (const ranking of rankings) {
-    ranking.forEach((row, index) => {
-      const contribution = 1 / (RRF_K + index + 1);
-      const existing = scores.get(row.id);
-      if (existing) {
-        existing.score += contribution;
-      } else {
-        scores.set(row.id, { row, score: contribution });
-      }
-    });
-  }
-
-  return [...scores.values()].sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
 type SessionMeta = { sessionNumber: number; startedAt: string | null };

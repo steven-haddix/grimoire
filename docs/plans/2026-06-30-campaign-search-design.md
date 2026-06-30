@@ -43,8 +43,12 @@ A unified, campaign-scoped retrieval index. One row per embeddable chunk.
 Indexes: btree on `campaign_id`, `session_id`, `(source_type, source_id)`;
 HNSW (`vector_cosine_ops`) on `embedding`; GIN on `search_vector`.
 
-Requires the `vector` extension (`CREATE EXTENSION IF NOT EXISTS vector` — in the
-0008 migration; Neon supports pgvector on all plans).
+Requires the `vector` extension. The 0008 migration runs
+`CREATE EXTENSION IF NOT EXISTS vector`, but on self-hosted Postgres (Coolify/VM)
+pgvector must be **installed on the server first** — vanilla Postgres doesn't
+bundle it. Use a pgvector-enabled image (e.g. `pgvector/pgvector:pg16`) or
+install the OS package (`postgresql-NN-pgvector`); otherwise the migration fails
+with `could not open extension control file ".../vector.control"`.
 
 ## Retrieval (hybrid + RRF)
 
@@ -63,14 +67,24 @@ Requires the `vector` extension (`CREATE EXTENSION IF NOT EXISTS vector` — in 
 
 Best-effort writers in `lib/search/indexer.ts` (never throw):
 
-- `indexSession(sessionId)` — summary + chunked transcripts. Called from
-  `/api/summarize` after the recap is written. Idempotent (replaces the
-  session's summary/transcript chunks).
-- `indexMemory(memory)` — called from the agent's `rememberFact` tool right
-  after insert, so new facts are searchable immediately. Idempotent per memory.
+- `indexSession(sessionId)` — chunked summary + chunked transcripts. Scheduled
+  from `/api/summarize` via `after()` so the embedding calls run *after* the
+  response flushes and add no latency to the summarize request. Idempotent.
+- `indexMemory(memory)` — scheduled from the agent's `rememberFact` tool via
+  `after()`, so "remember that…" never stalls the Discord reply on an embedding
+  round-trip. Idempotent per memory.
 
-Transcripts are grouped into ~1500-char chunks (`chunkTranscriptLines`) so each
-embedding stays focused but keeps surrounding context.
+Both chunk before embedding: transcripts via `chunkTranscriptLines` (consecutive
+lines grouped to ~1500 chars) and summaries via `chunkText` (split on section /
+paragraph boundaries) — the latter so a multi-section recap ("Plot, Combat,
+Loot") doesn't collapse into one diluted vector. Pure chunking/fusion logic
+lives in `chunking.ts` / `fusion.ts` (no DB deps) and is unit-tested.
+
+Each writer embeds **before** mutating the index and wraps the delete+insert in a
+`db.transaction()`, so a failed/slow embedding or a mid-write crash can't leave a
+session unsearchable. (Transactions require the node-postgres driver, which is
+what self-hosted Postgres resolves to; the legacy neon-http path has no
+transaction support.)
 
 ### Backfill
 
@@ -89,7 +103,8 @@ found.
 
 ## New / modified files
 
-- **New** `apps/web/src/lib/search/embeddings.ts`, `indexer.ts`, `search.ts`
+- **New** `apps/web/src/lib/search/embeddings.ts`, `chunking.ts`, `fusion.ts`,
+  `indexer.ts`, `search.ts` (+ `chunking.test.ts`, `fusion.test.ts`)
 - **New** `apps/web/scripts/backfill-search-index.ts`
 - **New** `apps/web/drizzle/0008_add_searchable_chunks.sql`
 - **Modified** `apps/web/src/db/schema.ts` (table + relations)
@@ -100,5 +115,10 @@ found.
 
 - Index `chat_messages` (@mention conversations) too.
 - Re-index on transcript edits / summary regeneration.
-- A worker queue for embedding instead of inline at summarize-time.
+- Emit metrics on embedding/index failures (currently logged but unmetered), so
+  a silent degradation to keyword-only is observable.
+- A durable job queue with retries (the current `after()` deferral keeps work
+  off the request path but doesn't survive a process restart mid-embed).
+- Skip re-embedding unchanged chunks (content hash) to avoid re-embedding a whole
+  session on every re-summarize.
 - Surface search in the web admin UI.
