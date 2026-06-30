@@ -8,7 +8,7 @@ import {
   transcripts,
 } from "@/db/schema";
 import { chunkText, chunkTranscriptLines } from "./chunking";
-import { embedText, embedTexts } from "./embeddings";
+import { embeddingMeta, embedText, embedTexts } from "./embeddings";
 
 type PendingChunk = {
   sourceType: SearchableChunkSource;
@@ -97,16 +97,20 @@ export async function indexSession(sessionId: number): Promise<void> {
       if (!pending.length) return;
 
       await tx.insert(searchableChunks).values(
-        pending.map((p, index) => ({
-          campaignId,
-          sessionId,
-          sourceType: p.sourceType,
-          sourceId: p.sourceId,
-          chunkIndex: p.chunkIndex,
-          speaker: p.speaker,
-          content: p.content,
-          embedding: embeddings[index] ?? null,
-        })),
+        pending.map((p, index) => {
+          const embedding = embeddings[index] ?? null;
+          return {
+            campaignId,
+            sessionId,
+            sourceType: p.sourceType,
+            sourceId: p.sourceId,
+            chunkIndex: p.chunkIndex,
+            speaker: p.speaker,
+            content: p.content,
+            embedding,
+            ...embeddingMeta(embedding),
+          };
+        }),
       );
     });
   } catch (error) {
@@ -151,6 +155,7 @@ export async function indexMemory(memory: {
         speaker: null,
         content,
         embedding,
+        ...embeddingMeta(embedding),
       });
     });
   } catch (error) {

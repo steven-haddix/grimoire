@@ -5,10 +5,37 @@ import { embed, embedMany } from "ai";
 // EMBEDDING_DIMENSIONS in the db schema) and accepts up to ~8191 tokens of
 // input. We cap embedding input well under that; the full text is still stored
 // on the chunk, only the embedding input is truncated.
-const EMBEDDING_MODEL_ID = "text-embedding-3-small";
+export const EMBEDDING_PROVIDER = "openai";
+export const EMBEDDING_MODEL = "text-embedding-3-small";
 const MAX_EMBEDDING_INPUT_CHARS = 24_000;
 
-const model = openai.textEmbeddingModel(EMBEDDING_MODEL_ID);
+const model = openai.textEmbeddingModel(EMBEDDING_MODEL);
+
+export type EmbeddingMeta = {
+  embeddingProvider: string | null;
+  embeddingModel: string | null;
+  embeddingDimensions: number | null;
+};
+
+/**
+ * Provenance to store alongside an embedding so a future model/provider switch
+ * can re-embed accurately and search can avoid comparing vectors from different
+ * spaces. Returns all-null for a missing embedding (keyword-only row).
+ */
+export function embeddingMeta(embedding: number[] | null): EmbeddingMeta {
+  if (!embedding) {
+    return {
+      embeddingProvider: null,
+      embeddingModel: null,
+      embeddingDimensions: null,
+    };
+  }
+  return {
+    embeddingProvider: EMBEDDING_PROVIDER,
+    embeddingModel: EMBEDDING_MODEL,
+    embeddingDimensions: embedding.length,
+  };
+}
 
 export function embeddingsEnabled(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);

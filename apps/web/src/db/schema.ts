@@ -160,6 +160,13 @@ export const searchableChunks = pgTable(
     speaker: text("speaker"),
     content: text("content").notNull(),
     embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }),
+    // Provenance of `embedding`, so a future embedding-service/model switch can
+    // identify exactly which rows to re-embed and search can avoid mixing
+    // incomparable vector spaces. All null when the row has no embedding
+    // (keyword-only).
+    embeddingProvider: text("embedding_provider"),
+    embeddingModel: text("embedding_model"),
+    embeddingDimensions: integer("embedding_dimensions"),
     searchVector: tsvector("search_vector").generatedAlwaysAs(
       (): SQL => sql`to_tsvector('english', "content")`,
     ),

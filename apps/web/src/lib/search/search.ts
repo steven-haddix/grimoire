@@ -13,7 +13,7 @@ import {
   searchableChunks,
   sessions,
 } from "@/db/schema";
-import { embedText } from "./embeddings";
+import { EMBEDDING_MODEL, embedText } from "./embeddings";
 import { fuse } from "./fusion";
 
 export type CampaignSearchResult = {
@@ -111,6 +111,11 @@ async function semanticSearch(
       and(
         eq(searchableChunks.campaignId, campaignId),
         isNotNull(searchableChunks.embedding),
+        // Only compare against vectors from the active model — embeddings from
+        // different models live in different spaces, so during a migration the
+        // not-yet-re-embedded rows must be excluded (they still surface via the
+        // keyword leg).
+        eq(searchableChunks.embeddingModel, EMBEDDING_MODEL),
       ),
     )
     .orderBy(asc(distance))

@@ -64,6 +64,13 @@
       "when": 1782850057459,
       "tag": "0008_add_searchable_chunks",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782856538629,
+      "tag": "0009_track_embedding_provenance",
+      "breakpoints": true
     }
   ]
 }

@@ -37,6 +37,9 @@ A unified, campaign-scoped retrieval index. One row per embeddable chunk.
 | `speaker` | text (nullable) | Speaker when a transcript chunk is single-speaker |
 | `content` | text | The chunk text |
 | `embedding` | vector(1536) (nullable) | OpenAI `text-embedding-3-small`; null when embedding unavailable |
+| `embedding_provider` | text (nullable) | Provider that produced `embedding` (e.g. `openai`) |
+| `embedding_model` | text (nullable) | Model id (e.g. `text-embedding-3-small`) |
+| `embedding_dimensions` | integer (nullable) | Vector length, for migration/auditing |
 | `search_vector` | tsvector (generated) | `to_tsvector('english', content)`, STORED |
 | `created_at` | timestamp | When indexed |
 
@@ -85,6 +88,22 @@ Each writer embeds **before** mutating the index and wraps the delete+insert in 
 session unsearchable. (Transactions require the node-postgres driver, which is
 what self-hosted Postgres resolves to; the legacy neon-http path has no
 transaction support.)
+
+### Embedding provenance & migrations
+
+Every embedded row records `embedding_provider`, `embedding_model`, and
+`embedding_dimensions` (from `embeddingMeta()` in `embeddings.ts`). Embeddings
+from different models occupy different vector spaces and are not comparable, so:
+
+- The semantic search leg filters on `embedding_model = <active model>`, meaning
+  rows embedded by an older model are simply ignored by vector search (they still
+  surface via keyword search) until re-embedded — no silently-wrong results.
+- To switch providers/models: bump `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` (and
+  `EMBEDDING_DIMENSIONS` if the size changes — note the `vector(N)` column is
+  fixed-width, so a different dimensionality needs a column/table change), then
+  re-run the backfill. `SELECT ... WHERE embedding_model <> '<new model>'`
+  pinpoints exactly which rows still need re-embedding, so the migration can run
+  incrementally and be verified.
 
 ### Backfill
 
