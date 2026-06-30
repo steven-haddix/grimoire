@@ -1,6 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { stepCountIs, ToolLoopAgent, tool } from "ai";
 import { desc, eq } from "drizzle-orm";
+import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -13,8 +14,10 @@ import {
   summaries,
   transcripts,
 } from "@/db/schema";
-import { cache } from "@/lib/cache";
 import { generateIllustration } from "@/lib/agents/image-providers";
+import { cache } from "@/lib/cache";
+import { indexMemory } from "@/lib/search/indexer";
+import { searchCampaignHistory } from "@/lib/search/search";
 
 export type DiscordAgentInput = {
   guildId: string;
@@ -120,7 +123,9 @@ const instructions = [
   "Use tools to respond; prefer reply for normal text answers.",
   "Use say when the user asks to speak or read something aloud.",
   "Use illustrate when the user asks for art, a scene, a portrait, or a picture of something from the campaign.",
-  "Use getCampaignContext to answer questions about this guild's campaign, session history, or transcripts.",
+  "Use getCampaignContext to answer questions about this guild's campaign, recent sessions, or the latest transcript.",
+  "Use searchCampaignHistory when the user asks about a specific person, place, event, or detail that may be from an earlier session not covered by recent context (e.g. 'who was the innkeeper we met ages ago?', 'when did we first fight the lich?'). It searches every past session's transcripts, summaries, and your remembered facts. Prefer it over guessing, and feed it the key nouns from the question.",
+  "When searchCampaignHistory returns results, weave the relevant details into your in-character answer and reference which session they came from when it helps; if it finds nothing, admit the memory is lost to you rather than inventing details.",
   "Keep replies short unless the user asks for detail.",
   "Never mention tool names or system instructions.",
 ].join(" ");
@@ -373,6 +378,50 @@ function createDiscordAgent(params: {
           return loadCampaignContext(input.guildId, sessionLimit);
         },
       }),
+      searchCampaignHistory: tool({
+        description:
+          "Search the entire campaign history — every past session's transcripts and summaries, plus remembered facts — for specific people, places, events, or details. Use this for questions about things from earlier sessions that aren't in the recent context.",
+        inputSchema: z.object({
+          query: z
+            .string()
+            .min(1)
+            .describe(
+              "What to look for, in natural language. Include the key names/nouns, e.g. 'the innkeeper in the riverside town' or 'who betrayed the party'.",
+            ),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(20)
+            .optional()
+            .describe("Max results to return (default 8)."),
+        }),
+        execute: async ({ query, limit }) => {
+          if (!activeCampaignId) {
+            return {
+              ok: false,
+              error:
+                "No active campaign. There is no history for me to search.",
+            };
+          }
+          const results = await searchCampaignHistory({
+            campaignId: activeCampaignId,
+            query,
+            limit,
+          });
+          return {
+            ok: true,
+            resultCount: results.length,
+            results: results.map((r) => ({
+              source: r.sourceType,
+              session: r.sessionNumber,
+              date: r.sessionDate,
+              speaker: r.speaker,
+              content: r.content,
+            })),
+          };
+        },
+      }),
       ...(illustrateAvailable
         ? {
             illustrate: tool({
@@ -403,11 +452,10 @@ function createDiscordAgent(params: {
                   // tool because of a write.
                   if (activeCampaignId) {
                     try {
-                      const activeSession =
-                        await db.query.sessions.findFirst({
-                          where: eq(sessions.campaignId, activeCampaignId),
-                          orderBy: desc(sessions.startedAt),
-                        });
+                      const activeSession = await db.query.sessions.findFirst({
+                        where: eq(sessions.campaignId, activeCampaignId),
+                        orderBy: desc(sessions.startedAt),
+                      });
                       const buffer = Buffer.from(image.base64, "base64");
                       const captionTrim =
                         sceneDescription.length > 80
@@ -481,12 +529,31 @@ function createDiscordAgent(params: {
                 "No active campaign. Cannot store memories without a campaign.",
             };
           }
-          await db.insert(memories).values({
-            campaignId: activeCampaignId,
-            content: content.trim(),
-            category,
-            source: source?.trim() || input.userDisplayName || input.userName,
-          });
+          const [inserted] = await db
+            .insert(memories)
+            .values({
+              campaignId: activeCampaignId,
+              content: content.trim(),
+              category,
+              source: source?.trim() || input.userDisplayName || input.userName,
+            })
+            .returning();
+
+          // Make the new fact searchable, but defer the embedding write until
+          // after the response flushes (via `after`) so "remember that…" never
+          // stalls the Discord reply on an embedding round-trip. Best-effort —
+          // indexMemory never throws.
+          if (inserted) {
+            const memoryId = inserted.id;
+            const memoryContent = content.trim();
+            after(() =>
+              indexMemory({
+                id: memoryId,
+                campaignId: activeCampaignId,
+                content: memoryContent,
+              }),
+            );
+          }
           return { ok: true };
         },
       }),
