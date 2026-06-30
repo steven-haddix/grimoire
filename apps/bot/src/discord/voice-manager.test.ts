@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import { VoiceConnectionStatus } from "@discordjs/voice";
-import { createVoiceManager } from "./voice-manager";
+import {
+  installDiscordVoiceMock,
+  VoiceConnectionStatus,
+} from "./discord-voice.mock";
+
+// Install a complete @discordjs/voice stub before `./voice-manager` (and its
+// transitive `./audio-output` import) is loaded dynamically inside each test,
+// so bun never evaluates the real dual CJS/ESM module. See discord-voice.mock.
+installDiscordVoiceMock();
 
 type FakeConnection = {
   joinConfig: { channelId: string };
@@ -97,6 +104,7 @@ describe("createVoiceManager", () => {
   });
 
   test("reuses a healthy same-channel connection", async () => {
+    const { createVoiceManager } = await import("./voice-manager");
     const existing = createConnection("channel-1");
     currentConnection = existing;
 
@@ -150,6 +158,7 @@ describe("createVoiceManager", () => {
   });
 
   test("recreates a stale connection when readiness check aborts", async () => {
+    const { createVoiceManager } = await import("./voice-manager");
     const stale = createConnection("channel-1", "connecting");
     const fresh = createConnection("channel-1", "connecting");
     currentConnection = stale;

@@ -1,15 +1,12 @@
 import { describe, expect, mock, test } from "bun:test";
 import { PassThrough } from "node:stream";
+import {
+  AudioPlayerStatus,
+  installDiscordVoiceMock,
+  StreamType,
+} from "./discord-voice.mock";
 
 type Listener = (...args: unknown[]) => void;
-
-const audioPlayerStatus = {
-  Idle: "idle",
-};
-
-const streamType = {
-  Raw: "raw",
-};
 
 function createFakePlayer() {
   const listeners = new Map<string, Listener[]>();
@@ -31,7 +28,7 @@ function createFakePlayer() {
     }),
     play: mock(() => {
       queueMicrotask(() => {
-        for (const listener of listeners.get(audioPlayerStatus.Idle) ?? []) {
+        for (const listener of listeners.get(AudioPlayerStatus.Idle) ?? []) {
           listener();
         }
       });
@@ -53,12 +50,10 @@ const createAudioResourceMock = mock((stream: unknown, options: unknown) => ({
   options,
 }));
 
-mock.module("@discordjs/voice", () => ({
-  AudioPlayerStatus: audioPlayerStatus,
-  StreamType: streamType,
+installDiscordVoiceMock({
   createAudioPlayer: createAudioPlayerMock,
   createAudioResource: createAudioResourceMock,
-}));
+});
 
 describe("GuildSpeechQueue", () => {
   test("subscribes to the voice connection and plays synthesized PCM", async () => {
@@ -91,7 +86,7 @@ describe("GuildSpeechQueue", () => {
       },
     );
     expect(createAudioResourceMock).toHaveBeenCalledWith(expect.anything(), {
-      inputType: streamType.Raw,
+      inputType: StreamType.Raw,
     });
     expect(createdPlayers[0]?.play).toHaveBeenCalledTimes(1);
   });
