@@ -3,12 +3,20 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { db } from "@/db";
-import { campaigns, memories } from "@/db/schema";
+import { campaigns, memories, searchableChunks } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
+import { indexMemory } from "@/lib/search/indexer";
 
-const MEMORY_CATEGORIES = ["lore", "character", "rule", "meta", "other"] as const;
+const MEMORY_CATEGORIES = [
+  "lore",
+  "character",
+  "rule",
+  "meta",
+  "other",
+] as const;
 type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
 async function assertCampaignAccess(campaignId: number) {
@@ -43,14 +51,23 @@ export async function createMemory(formData: FormData) {
     ? (categoryRaw as MemoryCategory)
     : "other";
 
-  const campaign = await assertCampaignAccess(campaignId);
+  await assertCampaignAccess(campaignId);
 
-  await db.insert(memories).values({
-    campaignId,
-    content,
-    category,
-    source: source || null,
-  });
+  const [inserted] = await db
+    .insert(memories)
+    .values({
+      campaignId,
+      content,
+      category,
+      source: source || null,
+    })
+    .returning();
+
+  // Index for campaign search after the response flushes, like the agent's
+  // rememberFact tool does. Best-effort — indexMemory never throws.
+  if (inserted) {
+    after(() => indexMemory({ id: inserted.id, campaignId, content }));
+  }
 
   revalidatePath(`/account/c/${campaignId}/memories`);
   revalidatePath(`/account/c/${campaignId}`);
@@ -58,9 +75,23 @@ export async function createMemory(formData: FormData) {
 
 export async function deleteMemory(memoryId: number, campaignId: number) {
   await assertCampaignAccess(campaignId);
-  await db
-    .delete(memories)
-    .where(and(eq(memories.id, memoryId), eq(memories.campaignId, campaignId)));
+  // Remove the memory's search-index chunk in the same transaction, or
+  // searchCampaignHistory keeps surfacing the "forgotten" fact.
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(memories)
+      .where(
+        and(eq(memories.id, memoryId), eq(memories.campaignId, campaignId)),
+      );
+    await tx
+      .delete(searchableChunks)
+      .where(
+        and(
+          eq(searchableChunks.sourceType, "memory"),
+          eq(searchableChunks.sourceId, memoryId),
+        ),
+      );
+  });
   revalidatePath(`/account/c/${campaignId}/memories`);
   revalidatePath(`/account/c/${campaignId}`);
 }

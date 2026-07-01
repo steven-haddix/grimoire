@@ -59,8 +59,10 @@ with `could not open extension control file ".../vector.control"`.
 
 1. **Semantic leg** — embed the query, order by cosine distance (`<=>`) over the
    HNSW index, scoped to the campaign.
-2. **Keyword leg** — `plainto_tsquery('english', query)` against the GIN index,
-   ranked by `ts_rank`.
+2. **Keyword leg** — `websearch_to_tsquery('english', query)` against the GIN
+   index (supports quoted phrases / OR / -exclusion in user-typed queries and
+   never raises on malformed input), ranked by `ts_rank` with length
+   normalization so long transcript chunks don't outrank short memories.
 3. **Fuse** the two ranked lists with Reciprocal Rank Fusion (`k = 60`). RRF
    avoids cross-modal score normalization and naturally handles one leg being
    empty (no embeddings → keyword-only, and vice versa).
@@ -75,7 +77,10 @@ Best-effort writers in `lib/search/indexer.ts` (never throw):
   response flushes and add no latency to the summarize request. Idempotent.
 - `indexMemory(memory)` — scheduled from the agent's `rememberFact` tool via
   `after()`, so "remember that…" never stalls the Discord reply on an embedding
-  round-trip. Idempotent per memory.
+  round-trip. Idempotent per memory. Also scheduled from the web UI's
+  `createMemory` server action; `deleteMemory` removes the memory's chunk in
+  the same transaction as the memory row so a "forgotten" fact can't keep
+  surfacing in search.
 
 Both chunk before embedding: transcripts via `chunkTranscriptLines` (consecutive
 lines grouped to ~1500 chars) and summaries via `chunkText` (split on section /
@@ -111,6 +116,20 @@ from different models occupy different vector spaces and are not comparable, so:
 and memories. Safe to re-run; re-run after setting `OPENAI_API_KEY` to add
 embeddings to keyword-only rows.
 
+## Web UI integration
+
+`/account/c/[id]/search` gives DMs the same hybrid retrieval in the browser.
+The page calls the `searchCampaign` server action (`app/actions/search.ts`),
+which enforces the same campaign access check as the other server actions
+(signed-in user must be an admin of the campaign's Discord guild) before
+delegating to `searchCampaignHistory`. Results carry a source badge
+(summary / transcript / memory), session number + date, speaker when known,
+and link to the session detail or memories page.
+
+Note the access model: only Discord guild *admins* can use the web app today.
+Opening search to players means widening `getUserAdminGuilds`-based checks to
+a member/role model — an app-wide auth decision, not a search-specific one.
+
 ## Agent integration
 
 New `searchCampaignHistory` tool. System-prompt guidance steers the agent to
@@ -140,4 +159,9 @@ found.
   off the request path but doesn't survive a process restart mid-embed).
 - Skip re-embedding unchanged chunks (content hash) to avoid re-embedding a whole
   session on every re-summarize.
-- Surface search in the web admin UI.
+- Index in-progress sessions (today transcripts are only indexed when
+  `/api/summarize` runs at session end, so a live session isn't searchable yet).
+- Player-facing access (see Web UI integration — requires a member/role auth
+  model beyond guild admins).
+- Fuzzy matching for misspelled proper nouns (`pg_trgm` similarity as a third
+  retrieval leg) — fantasy names are frequent and English stemming won't help.

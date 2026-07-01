@@ -127,8 +127,14 @@ async function keywordSearch(
   query: string,
   limit: number,
 ): Promise<RankedRow[]> {
-  const tsQuery = sql`plainto_tsquery('english', ${query})`;
-  const rank = sql<number>`ts_rank(${searchableChunks.searchVector}, ${tsQuery})`;
+  // websearch_to_tsquery over plainto_tsquery: supports "quoted phrases",
+  // OR, and -exclusion in user-typed queries, and never raises a syntax
+  // error on malformed input (bare words still AND together like plainto).
+  const tsQuery = sql`websearch_to_tsquery('english', ${query})`;
+  // Normalization flag 1 divides rank by 1 + log(chunk length), so long
+  // transcript chunks don't outrank short memories just by containing more
+  // words overall.
+  const rank = sql<number>`ts_rank(${searchableChunks.searchVector}, ${tsQuery}, 1)`;
 
   return db
     .select({
