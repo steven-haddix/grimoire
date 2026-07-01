@@ -63,10 +63,45 @@ with `could not open extension control file ".../vector.control"`.
    index (supports quoted phrases / OR / -exclusion in user-typed queries and
    never raises on malformed input), ranked by `ts_rank` with length
    normalization so long transcript chunks don't outrank short memories.
-3. **Fuse** the two ranked lists with Reciprocal Rank Fusion (`k = 60`). RRF
+3. **Live-tail legs** (in-progress sessions only) — see "Live sessions" below.
+4. **Fuse** the ranked lists with Reciprocal Rank Fusion (`k = 60`). RRF
    avoids cross-modal score normalization and naturally handles one leg being
    empty (no embeddings → keyword-only, and vice versa).
-4. **Enrich** with a human-friendly session number + date for provenance.
+5. **Enrich** with a human-friendly session number + date for provenance.
+
+## Live sessions
+
+Mid-session content is searchable through two cooperating mechanisms:
+
+**Debounced re-index from ingest.** `/api/ingest` schedules
+`maybeIndexSession(sessionId)` via `after()` on every transcript line. An
+atomic claim on `sessions.last_indexed_at` (UPDATE … WHERE older-than-window
+RETURNING) means at most one `indexSession` run starts per 5-minute window
+(`LIVE_INDEX_DEBOUNCE_MS`) no matter how many ingest calls race. Each
+`indexSession` run takes a `pg_advisory_xact_lock` keyed on the session id,
+since overlapping runs (ingest debounce vs. summarize) could otherwise both
+pass the delete phase under read committed and insert duplicate chunks. Crash
+recovery is free: the next ingest after the window re-claims, and
+`/api/summarize` still runs the authoritative final pass at session end. Cost
+note: re-embedding a whole session every 5 minutes sounds expensive but isn't
+(a 4-hour session ≈ 40k tokens → the cumulative re-embeds cost ~$0.02 with
+`text-embedding-3-small`); content-hash skipping remains a future optimization
+for rate limits and HNSW index churn, not dollars.
+
+**Query-time live tail.** Each index run records the max transcript id it
+captured in `sessions.last_indexed_transcript_id`. At search time, lines above
+that watermark in active sessions — the last ≤5 minutes of dialogue, i.e.
+"what was that character's name we just talked to?" — are chunked in memory
+with the same `chunkTranscriptLines`, embedded on the fly (a handful of
+chunks, one `embedMany` call, only while a session is live), and ranked by
+`lib/search/live-tail.ts` (pure, unit-tested) into two extra RRF lists
+mirroring the indexed legs: cosine similarity with an absolute floor
+(`TAIL_MIN_SIMILARITY` — "rank 1 of 3" means nothing without one) and
+stopword-aware term matching. Tail rows use negative synthetic ids so they
+can't collide with `searchable_chunks` ids in `fuse`. Because the watermark is
+exact (set to the max id the run's SELECT saw), no line can fall between the
+index and the tail; `MAX_TAIL_LINES`/`MAX_TAIL_CHUNKS` bound per-search cost
+if the indexer falls behind.
 
 ## Indexing
 
@@ -74,7 +109,9 @@ Best-effort writers in `lib/search/indexer.ts` (never throw):
 
 - `indexSession(sessionId)` — chunked summary + chunked transcripts. Scheduled
   from `/api/summarize` via `after()` so the embedding calls run *after* the
-  response flushes and add no latency to the summarize request. Idempotent.
+  response flushes and add no latency to the summarize request, and from
+  `/api/ingest` via the debounced `maybeIndexSession` (see "Live sessions").
+  Idempotent; runs are serialized per session by an advisory lock.
 - `indexMemory(memory)` — scheduled from the agent's `rememberFact` tool via
   `after()`, so "remember that…" never stalls the Discord reply on an embedding
   round-trip. Idempotent per memory. Also scheduled from the web UI's
@@ -157,10 +194,8 @@ found.
   a silent degradation to keyword-only is observable.
 - A durable job queue with retries (the current `after()` deferral keeps work
   off the request path but doesn't survive a process restart mid-embed).
-- Skip re-embedding unchanged chunks (content hash) to avoid re-embedding a whole
-  session on every re-summarize.
-- Index in-progress sessions (today transcripts are only indexed when
-  `/api/summarize` runs at session end, so a live session isn't searchable yet).
+- Skip re-embedding unchanged chunks (content hash) to avoid re-embedding a
+  whole session on every mid-session re-index and re-summarize.
 - Player-facing access (see Web UI integration — requires a member/role auth
   model beyond guild admins).
 - Fuzzy matching for misspelled proper nouns (`pg_trgm` similarity as a third

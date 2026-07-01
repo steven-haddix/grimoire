@@ -107,12 +107,18 @@ The Discord agent can recall details from any past session via the
   `null` instead of throwing when `OPENAI_API_KEY` is unset so search degrades to
   keyword-only.
 - `indexer.ts`: best-effort writers — `indexSession` (called from
-  `/api/summarize`) and `indexMemory` (called from the `rememberFact` tool and
-  the `createMemory` server action). Both are idempotent. `deleteMemory`
-  removes the memory's chunk in the same transaction; keep index writes in
-  sync with any new code path that creates/deletes memories or summaries.
+  `/api/summarize`, plus debounced mid-session via `maybeIndexSession` from
+  `/api/ingest`) and `indexMemory` (called from the `rememberFact` tool and
+  the `createMemory` server action). Both are idempotent; session runs are
+  serialized by a per-session advisory lock. `deleteMemory` removes the
+  memory's chunk in the same transaction; keep index writes in sync with any
+  new code path that creates/deletes memories or summaries.
 - `search.ts`: hybrid retrieval — pgvector cosine + Postgres full-text
-  (`websearch_to_tsquery`), fused with Reciprocal Rank Fusion.
+  (`websearch_to_tsquery`), fused with Reciprocal Rank Fusion. In-progress
+  sessions' not-yet-indexed lines (above
+  `sessions.last_indexed_transcript_id`) are chunked/embedded at query time
+  and fused in as extra legs (`live-tail.ts`), so live sessions are
+  searchable.
 
 The web UI exposes the same retrieval at `/account/c/[id]/search`, via the
 `searchCampaign` server action in `apps/web/src/app/actions/search.ts` (same

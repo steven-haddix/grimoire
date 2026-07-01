@@ -127,8 +127,8 @@ export function SearchView({
             Nothing in the record
           </h3>
           <p className="t-meta" style={{ maxWidth: 420, margin: "0 auto" }}>
-            No match for “{searched}”. Sessions are indexed when they’re
-            summarized, so a session still in progress won’t appear yet.
+            No match for “{searched}”. Live sessions are covered too — try other
+            names, a &quot;quoted phrase&quot;, or a rephrasing.
           </p>
         </div>
       ) : (

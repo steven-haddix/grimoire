@@ -46,6 +46,13 @@ export const sessions = pgTable("sessions", {
   status: text("status").notNull().default("active"),
   startedAt: timestamp("started_at").notNull().defaultNow(),
   endedAt: timestamp("ended_at"),
+  // Live-search bookkeeping. `lastIndexedAt` debounces mid-session re-index
+  // runs (set when a run is claimed, before indexing starts).
+  // `lastIndexedTranscriptId` is the exact high-water mark of transcript rows
+  // captured by the last index run; lines above it are the "live tail" that
+  // search covers at query time without an index.
+  lastIndexedAt: timestamp("last_indexed_at"),
+  lastIndexedTranscriptId: integer("last_indexed_transcript_id"),
 });
 
 export const botGuilds = pgTable("bot_guilds", {
