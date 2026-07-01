@@ -1,10 +1,18 @@
-import { type GoogleGenerativeAIProviderOptions, google } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { asc, eq } from "drizzle-orm";
 import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { campaigns, sessions, summaries, transcripts } from "@/db/schema";
+import {
+  claudeModel,
+  claudeProviderOptions,
+  resolveClaudeEffort,
+} from "@/lib/agents/claude";
 import { indexSession } from "@/lib/search/indexer";
+
+// Session recaps aren't latency-sensitive (fired in the background when a
+// session ends), so default to deep reasoning; override per env.
+const SUMMARY_EFFORT = resolveClaudeEffort(process.env.SUMMARY_EFFORT, "high");
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -88,27 +96,25 @@ export async function POST(req: Request) {
     : "";
 
   const { text } = await generateText({
-    model: google("gemini-3-flash-preview"),
-    system:
+    model: claudeModel,
+    instructions:
       "You are a D&D scribe. Summarize the session with sections for Plot, Combat, and Loot.",
     prompt: `${campaignContext ? `${campaignContext}\n\n` : ""}TRANSCRIPT:\n${script}`,
-    experimental_telemetry: {
+    runtimeContext: {
+      sessionId,
+      campaignId: session.campaignId ?? null,
+      campaignName: campaign?.name ?? null,
+    },
+    telemetry: {
       isEnabled: true,
       functionId: "summarize-session",
-      metadata: {
-        sessionId,
-        ...(session.campaignId && { campaignId: session.campaignId }),
-        ...(campaign?.name && { campaignName: campaign.name }),
+      includeRuntimeContext: {
+        sessionId: true,
+        campaignId: true,
+        campaignName: true,
       },
     },
-    providerOptions: {
-      google: {
-        thinkingConfig: {
-          thinkingLevel: "high",
-          includeThoughts: true,
-        },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    providerOptions: claudeProviderOptions(SUMMARY_EFFORT),
   });
 
   await db.insert(summaries).values({ sessionId, text });

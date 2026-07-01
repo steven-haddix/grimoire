@@ -90,13 +90,19 @@ Preferred commands from repo root:
 
 Avoid manual edits inside `apps/web/drizzle/` unless you are intentionally fixing a broken migration.
 
-## Summarization (Vercel AI SDK)
+## LLM text generation (Vercel AI SDK)
 
-Summarization is implemented in `apps/web/src/app/api/summarize/route.ts` using Vercel AI SDK’s `generateText`.
-If you switch models/providers (Google/OpenAI/etc), update:
-- provider code and env var usage
-- `apps/web/.env.example`
-- any deployment docs in `README.md`
+Text generation runs through the Vercel AI SDK on **Claude Sonnet 5** (`@ai-sdk/anthropic`):
+- The Discord agent (`apps/web/src/lib/agents/discord-agent.ts`) uses a `ToolLoopAgent`.
+- Session summarization (`apps/web/src/app/api/summarize/route.ts`) uses `generateText`.
+
+Shared model + provider config lives in `apps/web/src/lib/agents/claude.ts`. Sonnet 5
+runs adaptive thinking; reasoning depth is tuned via `effort` (`AGENT_EFFORT` defaults to
+`medium`, `SUMMARY_EFFORT` to `high`). Do NOT set `thinking.budgetTokens` — Sonnet 5 rejects it.
+Requires `ANTHROPIC_API_KEY`. Image generation still uses `@ai-sdk/google` / `@ai-sdk/openai`.
+
+If you switch models/providers, update `apps/web/src/lib/agents/claude.ts`, env var usage,
+`apps/web/.env.example`, and any deployment docs in `README.md`.
 
 ## Campaign history search (RAG)
 
