@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transcripts } from "@/db/schema";
+import { maybeIndexSession } from "@/lib/search/indexer";
 
 type IngestPayload = {
   sessionId: number;
@@ -85,6 +86,10 @@ export async function POST(req: Request) {
     content: payload.text,
     timestamp: payload.timestamp ? new Date(payload.timestamp) : new Date(),
   });
+
+  // Keep the live session searchable: debounced, best-effort, and runs after
+  // the response flushes so ingest latency is unaffected.
+  after(() => maybeIndexSession(payload.sessionId));
 
   return NextResponse.json({ ok: true });
 }

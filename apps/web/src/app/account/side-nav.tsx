@@ -4,8 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
-import { authClient } from "@/lib/auth/client";
 import { Diamond } from "@/components/grimoire/marks";
+import { authClient } from "@/lib/auth/client";
 
 export type CampaignNavEntry = {
   id: number;
@@ -66,7 +66,7 @@ export function SideNav({ user, campaigns, counts }: SideNavProps) {
 
   const activeCampaign =
     scope.kind === "campaign"
-      ? campaigns.find((c) => c.id === scope.campaignId) ?? null
+      ? (campaigns.find((c) => c.id === scope.campaignId) ?? null)
       : null;
 
   const renderNavItem = (
@@ -102,10 +102,7 @@ export function SideNav({ user, campaigns, counts }: SideNavProps) {
         className="nav-brand"
         style={{ textDecoration: "none" }}
       >
-        <span
-          className="nav-brand__mark"
-          style={{ border: 0, padding: 0 }}
-        >
+        <span className="nav-brand__mark" style={{ border: 0, padding: 0 }}>
           <Image
             src="/logo.png"
             alt="Grimoire"
@@ -117,10 +114,7 @@ export function SideNav({ user, campaigns, counts }: SideNavProps) {
         </span>
         <span>
           <span className="nav-brand__name">Grimoire</span>
-          <span
-            className="nav-brand__sub"
-            style={{ display: "block" }}
-          >
+          <span className="nav-brand__sub" style={{ display: "block" }}>
             Scribe · v0.4
           </span>
         </span>
@@ -137,10 +131,7 @@ export function SideNav({ user, campaigns, counts }: SideNavProps) {
           <div className="nav-section__lbl">
             <span>This campaign</span>
             {activeCampaign.isActive ? (
-              <span
-                className="t-meta t-meta--lit"
-                style={{ fontSize: 9 }}
-              >
+              <span className="t-meta t-meta--lit" style={{ fontSize: 9 }}>
                 active
               </span>
             ) : null}
@@ -159,6 +150,11 @@ export function SideNav({ user, campaigns, counts }: SideNavProps) {
             href: `/account/c/${activeCampaign.id}/sessions`,
             label: "Sessions",
             count: counts.perCampaignSessions[activeCampaign.id] ?? 0,
+          })}
+          {renderNavItem({
+            href: `/account/c/${activeCampaign.id}/search`,
+            label: "Search",
+            matchExact: true,
           })}
           {renderNavItem({
             href: `/account/c/${activeCampaign.id}/memories`,

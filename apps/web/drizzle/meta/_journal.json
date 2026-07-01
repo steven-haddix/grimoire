@@ -71,6 +71,13 @@
       "when": 1782856538629,
       "tag": "0009_track_embedding_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782942109830,
+      "tag": "0010_live_session_indexing",
+      "breakpoints": true
     }
   ]
 }
