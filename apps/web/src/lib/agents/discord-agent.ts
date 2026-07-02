@@ -1,5 +1,4 @@
-import { google } from "@ai-sdk/google";
-import { stepCountIs, ToolLoopAgent, tool } from "ai";
+import { isStepCount, ToolLoopAgent, tool } from "ai";
 import { desc, eq } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
@@ -14,6 +13,11 @@ import {
   summaries,
   transcripts,
 } from "@/db/schema";
+import {
+  claudeModel,
+  claudeProviderOptions,
+  resolveClaudeEffort,
+} from "@/lib/agents/claude";
 import { generateIllustration } from "@/lib/agents/image-providers";
 import { cache } from "@/lib/cache";
 import { indexMemory } from "@/lib/search/indexer";
@@ -92,6 +96,10 @@ function illustrateCacheKey(guildId: string): string {
 
 const _MAX_REPLY_CHARS = 1800;
 const _MAX_SAY_CHARS = 280;
+
+// Reasoning depth for the agent. Balanced by default so tool use and campaign
+// recall get real reasoning without tanking reply latency; override per env.
+const AGENT_EFFORT = resolveClaudeEffort(process.env.AGENT_EFFORT, "medium");
 
 const instructions = [
   "You are Grimoire - an ancient, sentient spellbook bound to record the tales of hapless adventurers.",
@@ -321,16 +329,22 @@ function createDiscordAgent(params: {
     : `${instructions} The illustrate tool is currently unavailable because this guild has reached its daily limit of ${ILLUSTRATE_DAILY_LIMIT} generated images. If a user asks for art or a scene, let them know they've hit the daily limit and can try again tomorrow.`;
 
   return new ToolLoopAgent({
-    model: google("gemini-3-flash-preview"),
+    model: claudeModel,
     instructions: agentInstructions,
-    stopWhen: stepCountIs(6),
-    experimental_telemetry: {
+    stopWhen: isStepCount(6),
+    providerOptions: claudeProviderOptions(AGENT_EFFORT),
+    runtimeContext: {
+      guildId: input.guildId,
+      channelId: input.channelId,
+      userId: input.userId,
+    },
+    telemetry: {
       isEnabled: true,
       functionId: "discord-agent",
-      metadata: {
-        guildId: input.guildId,
-        channelId: input.channelId,
-        userId: input.userId,
+      includeRuntimeContext: {
+        guildId: true,
+        channelId: true,
+        userId: true,
       },
     },
     tools: {
