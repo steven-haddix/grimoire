@@ -45,6 +45,7 @@ export type BotApi = {
   ingestTranscript: (params: {
     sessionId: number;
     speaker: string;
+    speakerUserId: string;
     text: string;
     timestamp: string;
   }) => Promise<void>;
@@ -155,10 +156,16 @@ export function createBotApi(config: BotConfig): BotApi {
       };
       return { sessionId: data.sessionId, resumed: data.resumed ?? false };
     },
-    ingestTranscript: async ({ sessionId, speaker, text, timestamp }) => {
+    ingestTranscript: async ({
+      sessionId,
+      speaker,
+      speakerUserId,
+      text,
+      timestamp,
+    }) => {
       await postBotJson(
         "/ingest",
-        { sessionId, speaker, text, timestamp },
+        { sessionId, speaker, speakerUserId, text, timestamp },
         "Transcript ingest",
       );
     },

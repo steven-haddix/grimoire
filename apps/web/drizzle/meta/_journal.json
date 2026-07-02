@@ -78,6 +78,13 @@
       "when": 1782942109830,
       "tag": "0010_live_session_indexing",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782961195181,
+      "tag": "0011_petite_loa",
+      "breakpoints": true
     }
   ]
 }

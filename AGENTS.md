@@ -70,8 +70,9 @@ All routes expect `x-bot-secret`.
   - body: `{ guildId: string, channelId: string }`
   - response: `{ sessionId: number }`
 - `POST /api/ingest`
-  - body: `{ sessionId: number, speaker: string, text: string, timestamp?: string|number }`
+  - body: `{ sessionId: number, speaker: string, speakerUserId?: string, text: string, timestamp?: string|number }`
   - response: `{ ok: true }`
+  - `speakerUserId` is the speaker's Discord user ID (stable identity; `speaker` is just a display name)
 - `POST /api/summarize`
   - body: `{ sessionId: number|string }`
   - response: `{ success: true, summary: string }`
@@ -136,6 +137,33 @@ Operational notes:
   HNSW/GIN indexes).
 - Backfill existing data with `bun apps/web/scripts/backfill-search-index.ts`.
 - Design notes: `docs/plans/2026-06-30-campaign-search-design.md`.
+
+## Campaign entity graph (character tracking)
+
+Formal tracking of PCs, NPCs, factions, and locations, extracted from sessions
+into `players`, `entities`, `entity_aliases`, `entity_facts`, and
+`extraction_runs`. Code lives in `apps/web/src/lib/extraction/`:
+- `run.ts`: session-end orchestrator (`runExtraction`), triggered from
+  `/api/summarize` after search indexing. Best-effort and idempotent per
+  session; every attempt is recorded in `extraction_runs` with the raw LLM
+  output for replay/debugging.
+- `output-schema.ts`: zod schema + prompt (bump `PROMPT_VERSION` on material
+  prompt changes). Uses AI SDK `generateText` + `Output.object` on Claude.
+- `reconciler.ts`: pure, unit-tested. The LLM proposes observations with
+  candidate matches; this is the ONLY writer to the graph and enforces the
+  invariants (hallucinated-id rejection, merge redirects, tombstone refusal,
+  no-op fact dedup). Don't add DB access here — keep it pure.
+- `candidates.ts`: recall-oriented prefilter choosing which known entities the
+  model sees. Not identity matching — that's the model's job.
+- `facts are append-only`: the newest `entity_facts` row per (entity, key) is
+  the current value; older rows are the revision history. DM edits are just
+  rows with `source: "dm"` — never lock or overwrite.
+- Suppress (tombstone) and merge (redirect) are set from the web UI
+  (`/account/c/[id]/characters`); the reconciler respects both.
+- The Discord agent reads the graph via the `lookupCampaignEntities` tool, and
+  entities are indexed into `searchable_chunks` as `sourceType: "entity"`.
+- Backfill old sessions: `bun apps/web/scripts/backfill-entity-extraction.ts`
+  (one Claude call per session — try a single session id first).
 
 ## Engineering conventions (stay consistent)
 

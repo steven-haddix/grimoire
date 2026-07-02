@@ -32,6 +32,9 @@ export type CommandIntent =
 export type TranscriptInput = {
   sessionId: number;
   speaker: string;
+  // Discord user ID of the speaker. Display names drift; this is the stable
+  // identity key used for player/PC linking on the web side.
+  speakerUserId: string;
   text: string;
   timestamp: string;
 };

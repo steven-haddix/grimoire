@@ -6,6 +6,7 @@ import { maybeIndexSession } from "@/lib/search/indexer";
 type IngestPayload = {
   sessionId: number;
   speaker: string;
+  speakerUserId?: string;
   text: string;
   timestamp?: string | number;
 };
@@ -56,6 +57,14 @@ function parseIngestPayload(value: unknown): IngestPayload | null {
     text: value.text,
   };
 
+  // Optional: older bot deployments don't send it.
+  if (
+    typeof value.speakerUserId === "string" &&
+    value.speakerUserId.trim() !== ""
+  ) {
+    payload.speakerUserId = value.speakerUserId.trim();
+  }
+
   if (
     typeof value.timestamp === "string" ||
     typeof value.timestamp === "number"
@@ -83,6 +92,7 @@ export async function POST(req: Request) {
   await db.insert(transcripts).values({
     sessionId: payload.sessionId,
     speaker: payload.speaker,
+    speakerDiscordUserId: payload.speakerUserId ?? null,
     content: payload.text,
     timestamp: payload.timestamp ? new Date(payload.timestamp) : new Date(),
   });
