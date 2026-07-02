@@ -144,6 +144,7 @@ describe("TranscriptionService", () => {
     expect(sinkCalls).toHaveLength(1);
     expect(sinkCalls[0]?.sessionId).toBe(99);
     expect(sinkCalls[0]?.speaker).toBe("DM");
+    expect(sinkCalls[0]?.speakerUserId).toBe("user-3");
     expect(sinkCalls[0]?.text).toBe("hello");
     expect(typeof sinkCalls[0]?.timestamp).toBe("string");
   });

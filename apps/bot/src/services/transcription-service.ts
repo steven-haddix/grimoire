@@ -136,6 +136,7 @@ class SpeakerSession {
           .ingest({
             sessionId: this.params.sessionId,
             speaker,
+            speakerUserId: this.params.userId,
             text,
             timestamp: new Date().toISOString(),
           })

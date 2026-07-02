@@ -1,21 +1,18 @@
-import { count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import {
   botGuilds,
   campaigns,
+  entities,
   illustrations,
   memories,
   sessions,
 } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
 import { getUserAdminGuilds } from "@/lib/discord/server";
-import {
-  SideNav,
-  type CampaignNavEntry,
-  type LibraryCounts,
-} from "./side-nav";
+import { type CampaignNavEntry, type LibraryCounts, SideNav } from "./side-nav";
 
 export default async function AccountLayout({
   children,
@@ -35,6 +32,7 @@ export default async function AccountLayout({
     perCampaignSessionCounts,
     perCampaignMemoryCounts,
     perCampaignIllustrationCounts,
+    perCampaignEntityCounts,
   ] =
     guildIds.length > 0
       ? await Promise.all([
@@ -76,14 +74,26 @@ export default async function AccountLayout({
               value: count(),
             })
             .from(illustrations)
-            .innerJoin(
-              campaigns,
-              eq(illustrations.campaignId, campaigns.id),
-            )
+            .innerJoin(campaigns, eq(illustrations.campaignId, campaigns.id))
             .where(inArray(campaigns.guildId, guildIds))
             .groupBy(illustrations.campaignId),
+          db
+            .select({
+              campaignId: entities.campaignId,
+              value: count(),
+            })
+            .from(entities)
+            .innerJoin(campaigns, eq(entities.campaignId, campaigns.id))
+            .where(
+              and(
+                inArray(campaigns.guildId, guildIds),
+                isNull(entities.suppressedAt),
+                isNull(entities.mergedIntoEntityId),
+              ),
+            )
+            .groupBy(entities.campaignId),
         ])
-      : [[], [], [], [], []];
+      : [[], [], [], [], [], []];
 
   const activeCampaignByGuild = new Map(
     activeCampaignSettings.map((row) => [row.guildId, row.activeCampaignId]),
@@ -97,6 +107,9 @@ export default async function AccountLayout({
   );
   const illustrationsByCampaignCount = new Map(
     perCampaignIllustrationCounts.map((row) => [row.campaignId, row.value]),
+  );
+  const entitiesByCampaignCount = new Map(
+    perCampaignEntityCounts.map((row) => [row.campaignId, row.value]),
   );
 
   const campaignEntries: CampaignNavEntry[] = allCampaigns.map((c) => ({
@@ -118,10 +131,12 @@ export default async function AccountLayout({
     perCampaignSessions: Object.fromEntries(
       Array.from(sessionsByCampaignCount.entries()),
     ),
+    perCampaignEntities: Object.fromEntries(
+      Array.from(entitiesByCampaignCount.entries()),
+    ),
   };
 
-  const userName =
-    session.user?.name ?? session.user?.email ?? "Adventurer";
+  const userName = session.user?.name ?? session.user?.email ?? "Adventurer";
   const userInitial = (
     session.user?.name?.[0] ??
     session.user?.email?.[0] ??

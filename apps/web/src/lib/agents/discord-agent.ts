@@ -7,6 +7,7 @@ import {
   botGuilds,
   campaigns,
   chatMessages,
+  ENTITY_TYPES,
   illustrations,
   memories,
   sessions,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/agents/claude";
 import { generateIllustration } from "@/lib/agents/image-providers";
 import { cache } from "@/lib/cache";
+import { lookupEntities } from "@/lib/extraction/lookup";
 import { indexMemory } from "@/lib/search/indexer";
 import { searchCampaignHistory } from "@/lib/search/search";
 
@@ -132,7 +134,8 @@ const instructions = [
   "Use say when the user asks to speak or read something aloud.",
   "Use illustrate when the user asks for art, a scene, a portrait, or a picture of something from the campaign.",
   "Use getCampaignContext to answer questions about this guild's campaign, recent sessions, or the latest transcript.",
-  "Use searchCampaignHistory when the user asks about a specific person, place, event, or detail that may be from an earlier session not covered by recent context (e.g. 'who was the innkeeper we met ages ago?', 'when did we first fight the lich?'). It searches every past session's transcripts, summaries, and your remembered facts. Prefer it over guessing, and feed it the key nouns from the question.",
+  "Use lookupCampaignEntities first for direct questions about a specific character, NPC, faction, or place ('who is X?', 'where was X last seen?', 'what's X's status?'). It returns the tracked profile: known facts like status, last known location, and goals, plus who plays each PC and when the entity was last seen.",
+  "Use searchCampaignHistory when the user asks about a specific person, place, event, or detail that may be from an earlier session not covered by recent context (e.g. 'who was the innkeeper we met ages ago?', 'when did we first fight the lich?'), or when lookupCampaignEntities comes up empty. It searches every past session's transcripts, summaries, and your remembered facts. Prefer it over guessing, and feed it the key nouns from the question.",
   "When searchCampaignHistory returns results, weave the relevant details into your in-character answer and reference which session they came from when it helps; if it finds nothing, admit the memory is lost to you rather than inventing details.",
   "Keep replies short unless the user asks for detail.",
   "Never mention tool names or system instructions.",
@@ -390,6 +393,48 @@ function createDiscordAgent(params: {
         }),
         execute: async ({ sessionLimit }) => {
           return loadCampaignContext(input.guildId, sessionLimit);
+        },
+      }),
+      lookupCampaignEntities: tool({
+        description:
+          "Look up tracked campaign entities — player characters, NPCs, factions, locations — by name or alias. Returns each entity's profile: known facts (status, last known location, goals, …), aliases, who plays it (for PCs), and when it was last seen. Read-only.",
+        inputSchema: z.object({
+          query: z
+            .string()
+            .optional()
+            .describe(
+              "Name or alias to look up; partial matches work. Omit to list all entities of the given type.",
+            ),
+          type: z
+            .enum(ENTITY_TYPES)
+            .optional()
+            .describe("Filter by entity type"),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(20)
+            .optional()
+            .describe("Max results (default 8)."),
+        }),
+        execute: async ({ query, type, limit }) => {
+          if (!activeCampaignId) {
+            return {
+              ok: false,
+              error: "No active campaign. I track no one.",
+            };
+          }
+          const results = await lookupEntities({
+            campaignId: activeCampaignId,
+            query,
+            type,
+            limit,
+          });
+          return {
+            ok: true,
+            resultCount: results.length,
+            entities: results,
+          };
         },
       }),
       searchCampaignHistory: tool({

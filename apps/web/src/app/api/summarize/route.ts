@@ -8,6 +8,7 @@ import {
   claudeProviderOptions,
   resolveClaudeEffort,
 } from "@/lib/agents/claude";
+import { runExtraction } from "@/lib/extraction/run";
 import { indexSession } from "@/lib/search/indexer";
 
 // Session recaps aren't latency-sensitive (fired in the background when a
@@ -123,11 +124,15 @@ export async function POST(req: Request) {
     .set({ status: "completed", endedAt: new Date() })
     .where(eq(sessions.id, sessionId));
 
-  // Index this session's summary + transcripts for long-term campaign search.
-  // Runs after the response flushes (via `after`) so the embedding calls don't
-  // add latency to the summarize request. Best-effort — indexSession never
-  // throws.
-  after(() => indexSession(sessionId));
+  // Index this session's summary + transcripts for long-term campaign search,
+  // then extract entities into the campaign graph. Runs after the response
+  // flushes (via `after`) so neither adds latency to the summarize request.
+  // Sequential: extraction reads the summary/transcripts it also feeds on, and
+  // both are best-effort — neither ever throws.
+  after(async () => {
+    await indexSession(sessionId);
+    await runExtraction(sessionId);
+  });
 
   return NextResponse.json({ success: true, summary: text });
 }

@@ -1,13 +1,17 @@
 import { relations, type SQL, sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   customType,
   index,
   integer,
+  jsonb,
   pgTable,
+  real,
   serial,
   text,
   timestamp,
+  unique,
   vector,
 } from "drizzle-orm/pg-core";
 
@@ -78,6 +82,10 @@ export const transcripts = pgTable("transcripts", {
     .notNull()
     .references(() => sessions.id, { onDelete: "cascade" }),
   speaker: text("speaker").notNull(),
+  // Discord user ID of the speaker. `speaker` is a mutable display name; this
+  // is the stable identity used to link transcript lines to players/PCs.
+  // Nullable because rows ingested before this column existed have no ID.
+  speakerDiscordUserId: text("speaker_discord_user_id"),
   content: text("content").notNull(),
   timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
@@ -135,11 +143,187 @@ export const illustrations = pgTable("illustrations", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ---------------------------------------------------------------------------
+// Campaign entity graph
+//
+// Formal tracking of who/what exists in a campaign: player characters, NPCs,
+// factions, and locations, plus the real humans behind the PCs. Populated by
+// the session-end extraction pipeline (`@/lib/extraction`) — the LLM proposes
+// observations, a deterministic reconciler is the only writer. Facts are
+// append-only, so the graph is a living record with built-in revision history
+// rather than a static wiki.
+// ---------------------------------------------------------------------------
+
+// The real humans at the table, keyed by stable Discord user ID (display
+// names drift; IDs don't). One row per human per campaign.
+export const players = pgTable(
+  "players",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    discordUserId: text("discord_user_id").notNull(),
+    displayName: text("display_name").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    unique("players_campaign_user_unique").on(
+      table.campaignId,
+      table.discordUserId,
+    ),
+  ],
+);
+
+export const ENTITY_TYPES = ["pc", "npc", "faction", "location"] as const;
+export type EntityType = (typeof ENTITY_TYPES)[number];
+
+// A tracked thing in the campaign world. Rows carry identity only — every
+// mutable detail (description, status, last known location, …) lives in
+// `entity_facts` so nothing is ever overwritten, only superseded.
+export const entities = pgTable(
+  "entities",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    // "pc" | "npc" | "faction" | "location"
+    type: text("type").notNull(),
+    // Canonical display name. Alternate spellings/nicknames live in
+    // `entity_aliases`.
+    name: text("name").notNull(),
+    // For PCs: the human who plays them. Assigned manually in the web UI
+    // (extraction can rarely infer this reliably from speech).
+    playerId: integer("player_id").references(() => players.id, {
+      onDelete: "set null",
+    }),
+    lastSeenSessionId: integer("last_seen_session_id").references(
+      () => sessions.id,
+      { onDelete: "set null" },
+    ),
+    // Tombstone: a DM deleted this entity (e.g. an extraction hallucination).
+    // The reconciler refuses to recreate suppressed entities, otherwise they
+    // resurrect on the next session's extraction pass.
+    suppressedAt: timestamp("suppressed_at"),
+    // Merge redirect: this entity was a duplicate of another. The reconciler
+    // follows redirects so new observations land on the survivor.
+    mergedIntoEntityId: integer("merged_into_entity_id").references(
+      (): AnyPgColumn => entities.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("entities_campaign_idx").on(table.campaignId),
+    index("entities_campaign_type_idx").on(table.campaignId, table.type),
+  ],
+);
+
+// Alternate names for an entity: nicknames, titles, and the ASR misspellings
+// that voice transcription inevitably produces ("Thal Drin" → Thaldrin).
+// Candidate selection and the agent's lookup tool match against these.
+export const entityAliases = pgTable(
+  "entity_aliases",
+  {
+    id: serial("id").primaryKey(),
+    entityId: integer("entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    alias: text("alias").notNull(),
+    // Session whose extraction produced this alias; null for DM-added ones.
+    // Lets a re-run of one session's extraction replace exactly its own rows.
+    sourceSessionId: integer("source_session_id").references(
+      () => sessions.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    unique("entity_aliases_entity_alias_unique").on(
+      table.entityId,
+      table.alias,
+    ),
+  ],
+);
+
+export const ENTITY_FACT_SOURCES = ["extractor", "dm", "backfill"] as const;
+export type EntityFactSource = (typeof ENTITY_FACT_SOURCES)[number];
+
+// Append-only key/value facts about an entity. The current value of a key is
+// the newest row for (entityId, key); older rows are the revision history.
+// DM edits and extractor updates are both just new rows — nothing is locked,
+// nothing is lost.
+export const entityFacts = pgTable(
+  "entity_facts",
+  {
+    id: serial("id").primaryKey(),
+    entityId: integer("entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    // e.g. "description", "status", "last_known_location", "appearance",
+    // "goal". Free-form — the extractor is prompted with a preferred set but
+    // new keys are allowed.
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    // Extractor confidence in [0, 1]; null for DM edits (implicitly trusted).
+    confidence: real("confidence"),
+    // "extractor" | "dm" | "backfill"
+    source: text("source").notNull(),
+    sourceSessionId: integer("source_session_id").references(
+      () => sessions.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("entity_facts_entity_key_idx").on(table.entityId, table.key),
+  ],
+);
+
+// One row per extraction attempt. Stores the raw LLM output so bad graph
+// state can always be traced to either a bad proposal or a reconciler bug,
+// and so a session can be re-reconciled after a fix without re-paying the
+// model call.
+export const extractionRuns = pgTable(
+  "extraction_runs",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    promptVersion: text("prompt_version").notNull(),
+    model: text("model").notNull(),
+    // "pending" | "succeeded" | "failed"
+    status: text("status").notNull().default("pending"),
+    rawOutput: jsonb("raw_output"),
+    error: text("error"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [index("extraction_runs_session_idx").on(table.sessionId)],
+);
+
 // Dimensionality of OpenAI `text-embedding-3-small` vectors. Kept here so the
 // schema and the embedding helper can never drift apart.
 export const EMBEDDING_DIMENSIONS = 1536;
 
-export type SearchableChunkSource = "summary" | "transcript" | "memory";
+export type SearchableChunkSource =
+  | "summary"
+  | "transcript"
+  | "memory"
+  | "entity";
 
 // Unified retrieval index for campaign history. Each row is a small, embeddable
 // chunk of text (a session summary, a slice of a transcript, or a memory) plus
@@ -157,7 +341,7 @@ export const searchableChunks = pgTable(
     sessionId: integer("session_id").references(() => sessions.id, {
       onDelete: "cascade",
     }),
-    // "summary" | "transcript" | "memory"
+    // "summary" | "transcript" | "memory" | "entity"
     sourceType: text("source_type").notNull(),
     // id of the originating summary/memory row, or the session id for transcript
     // chunks. Used to make re-indexing idempotent.
@@ -200,6 +384,63 @@ export const campaignsRelations = relations(campaigns, ({ many }) => ({
   chatMessages: many(chatMessages),
   illustrations: many(illustrations),
   searchableChunks: many(searchableChunks),
+  players: many(players),
+  entities: many(entities),
+}));
+
+export const playersRelations = relations(players, ({ one, many }) => ({
+  campaign: one(campaigns, {
+    fields: [players.campaignId],
+    references: [campaigns.id],
+  }),
+  characters: many(entities),
+}));
+
+export const entitiesRelations = relations(entities, ({ one, many }) => ({
+  campaign: one(campaigns, {
+    fields: [entities.campaignId],
+    references: [campaigns.id],
+  }),
+  player: one(players, {
+    fields: [entities.playerId],
+    references: [players.id],
+  }),
+  lastSeenSession: one(sessions, {
+    fields: [entities.lastSeenSessionId],
+    references: [sessions.id],
+  }),
+  mergedInto: one(entities, {
+    fields: [entities.mergedIntoEntityId],
+    references: [entities.id],
+    relationName: "entity_merges",
+  }),
+  aliases: many(entityAliases),
+  facts: many(entityFacts),
+}));
+
+export const entityAliasesRelations = relations(entityAliases, ({ one }) => ({
+  entity: one(entities, {
+    fields: [entityAliases.entityId],
+    references: [entities.id],
+  }),
+}));
+
+export const entityFactsRelations = relations(entityFacts, ({ one }) => ({
+  entity: one(entities, {
+    fields: [entityFacts.entityId],
+    references: [entities.id],
+  }),
+}));
+
+export const extractionRunsRelations = relations(extractionRuns, ({ one }) => ({
+  session: one(sessions, {
+    fields: [extractionRuns.sessionId],
+    references: [sessions.id],
+  }),
+  campaign: one(campaigns, {
+    fields: [extractionRuns.campaignId],
+    references: [campaigns.id],
+  }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
