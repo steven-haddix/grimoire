@@ -46,12 +46,13 @@ type Scope =
         | "illustrations"
         | "sessions"
         | "characters"
+        | "chat"
         | null;
     };
 
 function parseScope(pathname: string): Scope {
   const match = pathname.match(
-    /^\/account\/c\/(\d+)(?:\/(live|memories|illustrations|sessions|characters))?/,
+    /^\/account\/c\/(\d+)(?:\/(live|memories|illustrations|sessions|characters|chat))?/,
   );
   if (!match) return { kind: "global" };
   const campaignId = Number.parseInt(match[1] ?? "", 10);
@@ -61,7 +62,8 @@ function parseScope(pathname: string): Scope {
     match[2] === "memories" ||
     match[2] === "illustrations" ||
     match[2] === "sessions" ||
-    match[2] === "characters"
+    match[2] === "characters" ||
+    match[2] === "chat"
       ? match[2]
       : null;
   return { kind: "campaign", campaignId, subpath };
@@ -163,6 +165,11 @@ export function SideNav({ user, campaigns, counts }: SideNavProps) {
             href: `/account/c/${activeCampaign.id}/characters`,
             label: "Characters",
             count: counts.perCampaignEntities[activeCampaign.id] ?? 0,
+          })}
+          {renderNavItem({
+            href: `/account/c/${activeCampaign.id}/chat`,
+            label: "Ask Grimoire",
+            matchExact: true,
           })}
           {renderNavItem({
             href: `/account/c/${activeCampaign.id}/search`,

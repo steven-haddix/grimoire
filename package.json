@@ -12,6 +12,7 @@
     "db:generate": "bun --filter web db:generate",
     "db:migrate": "bun --filter web db:migrate",
     "db:push": "bun --filter web db:push",
+    "db:seed": "bun --filter web db:seed",
     "db:studio": "bun --filter web db:studio",
     "lint": "biome lint .",
     "format": "biome format . --write",

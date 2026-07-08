@@ -1,0 +1,37 @@
+# Local development database for Grimoire.
+#
+# Postgres with pgvector (the search index uses an HNSW vector index; the
+# extension itself is created by migration 0008). Runs on host port 5436 so it
+# doesn't collide with other local Postgres containers.
+#
+# Usage:
+#   docker compose up -d
+#   # then point the app at it: swap DATABASE_URL in apps/web/.env to
+#   #   postgresql://grimoire:grimoire@localhost:5436/grimoire
+#   # (or prefix each command with DATABASE_URL=... — drizzle-kit reads .env,
+#   # not .env.local)
+#   bun db:migrate
+#   GUILD_ID=<your discord server id> bun db:seed   # optional sample campaign
+#
+# Data persists in the `grimoire-pgdata` volume; `docker compose down -v`
+# wipes it for a fresh start.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grimoire
+      POSTGRES_PASSWORD: grimoire
+      POSTGRES_DB: grimoire
+    ports:
+      - "5436:5432"
+    volumes:
+      - grimoire-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grimoire -d grimoire"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  grimoire-pgdata:

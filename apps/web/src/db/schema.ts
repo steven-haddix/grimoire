@@ -124,6 +124,33 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Web "Ask Grimoire" chat. One rolling conversation per user per campaign,
+// deliberately separate from the Discord `chat_messages` stream. `content` is
+// the user's text or the assistant's final markdown; tool-call intermediates
+// are not persisted.
+export const webChatMessages = pgTable(
+  "web_chat_messages",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    // better-auth user id; no FK because the auth tables live in a separate
+    // drizzle schema module.
+    userId: text("user_id").notNull(),
+    role: text("role").notNull(), // "user" | "assistant"
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("web_chat_messages_campaign_user_created_idx").on(
+      table.campaignId,
+      table.userId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const illustrations = pgTable("illustrations", {
   id: serial("id").primaryKey(),
   campaignId: integer("campaign_id")
@@ -382,6 +409,7 @@ export const campaignsRelations = relations(campaigns, ({ many }) => ({
   sessions: many(sessions),
   memories: many(memories),
   chatMessages: many(chatMessages),
+  webChatMessages: many(webChatMessages),
   illustrations: many(illustrations),
   searchableChunks: many(searchableChunks),
   players: many(players),
@@ -486,6 +514,16 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
     references: [campaigns.id],
   }),
 }));
+
+export const webChatMessagesRelations = relations(
+  webChatMessages,
+  ({ one }) => ({
+    campaign: one(campaigns, {
+      fields: [webChatMessages.campaignId],
+      references: [campaigns.id],
+    }),
+  }),
+);
 
 export const illustrationsRelations = relations(illustrations, ({ one }) => ({
   campaign: one(campaigns, {

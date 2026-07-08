@@ -5,25 +5,24 @@ import { z } from "zod";
 import { db } from "@/db";
 import {
   botGuilds,
-  campaigns,
   chatMessages,
-  ENTITY_TYPES,
   illustrations,
   memories,
   sessions,
-  summaries,
-  transcripts,
 } from "@/db/schema";
 import {
   claudeModel,
   claudeProviderOptions,
   resolveClaudeEffort,
 } from "@/lib/agents/claude";
+import {
+  createCampaignTools,
+  GRIMOIRE_PERSONA,
+  GRIMOIRE_TOOL_GUIDANCE,
+} from "@/lib/agents/grimoire-core";
 import { generateIllustration } from "@/lib/agents/image-providers";
 import { cache } from "@/lib/cache";
-import { lookupEntities } from "@/lib/extraction/lookup";
 import { indexMemory } from "@/lib/search/indexer";
-import { searchCampaignHistory } from "@/lib/search/search";
 
 export type DiscordAgentInput = {
   guildId: string;
@@ -44,40 +43,6 @@ export type DiscordAgentResult = {
   text?: string;
 };
 
-type CampaignContext = {
-  campaign: {
-    id: number;
-    name: string;
-    description: string | null;
-  } | null;
-  sessions: Array<{
-    id: number;
-    sessionNumber: number;
-    status: string;
-    startedAt: string | null;
-    endedAt: string | null;
-    summary: string | null;
-  }>;
-  recentTranscripts: Array<{
-    speaker: string;
-    content: string;
-    timestamp: string | null;
-  }>;
-  memories: Array<{
-    id: number;
-    content: string;
-    category: string;
-    source: string | null;
-    createdAt: string | null;
-  }>;
-  recentChatMessages: Array<{
-    displayName: string;
-    content: string;
-    isBot: boolean;
-    createdAt: string | null;
-  }>;
-};
-
 const MEMORY_CATEGORIES = [
   "lore",
   "character",
@@ -85,8 +50,6 @@ const MEMORY_CATEGORIES = [
   "meta",
   "other",
 ] as const;
-
-const DEFAULT_CHAT_MESSAGE_LIMIT = 25;
 
 const ILLUSTRATE_DAILY_LIMIT = 10;
 const ILLUSTRATE_TTL_SECONDS = 86_400; // 24 hours
@@ -103,47 +66,28 @@ const _MAX_SAY_CHARS = 280;
 // recall get real reasoning without tanking reply latency; override per env.
 const AGENT_EFFORT = resolveClaudeEffort(process.env.AGENT_EFFORT, "medium");
 
+// Discord delivery: strict brevity, and the reply/say/illustrate/rememberFact
+// tools that only exist on this channel. The persona and the shared
+// campaign-recall tool guidance live in grimoire-core.
 const instructions = [
-  "You are Grimoire - an ancient, sentient spellbook bound to record the tales of hapless adventurers.",
-  "You've witnessed countless campaigns, most ending in spectacular failure. You find the mortal obsession with dice-based decision making darkly amusing.",
-  "PERSONALITY:",
-  "- Dry, sarcastic wit with a morbid sense of humor.",
-  "- Speak conversationally in 1-3 sentences unless asked for detailed summaries.",
-  "- You're a book, so you remember sessions, you don't hear or see them.",
-  "- Occasionally reference your ancient wisdom and the countless fools whose stories you've recorded.",
-  "- Be helpful, but with personality - you're sardonic, not mean.",
-  "- React to critical fails with dark amusement, epic moments with grudging respect.",
+  ...GRIMOIRE_PERSONA,
   "RESPONSES:",
+  "- Speak conversationally in 1-3 sentences unless asked for detailed summaries.",
   '- Brief and conversational by default ("Ah yes, the tavern brawl. Your bard rolled a 2.").',
   '- Detailed only when asked ("Give me a summary", "What happened last session?").',
   "- When reading aloud, embrace your dramatic grimoire nature.",
-  "- Never break character or mention your technical functions.",
-  "MEMORY:",
-  "- You contain all session transcripts, summaries, and campaign details for this group.",
-  "- Campaign context includes the campaign name and description - use this to understand the setting and story.",
-  "- Reference past events with a knowing, slightly condescending tone.",
-  '- Make connections between sessions ("This is the third tavern you\'ve burned down.").',
   "REMEMBERING FACTS:",
   "- Use rememberFact when users explicitly ask you to remember something (e.g., 'remember that...', 'keep in mind...').",
   "- Also use rememberFact to store important facts you encounter: character names, NPC details, locations, relationships, lore.",
   "- Categories: 'character' for PCs/NPCs/traits, 'lore' for world/history/places, 'rule' for house rules/homebrew, 'meta' for scheduling/preferences, 'other' for misc.",
   "- Don't remember: jokes, casual chatter, questions, or speculation. When uncertain, don't remember - users can ask explicitly.",
   "- When you remember something, briefly acknowledge it in character ('I've inscribed that into my pages.').",
-  "Remember: You're not a helpful assistant - you're an immortal book of dark knowledge who happens to be documenting a D&D campaign. Act like it.",
   "Use tools to respond; prefer reply for normal text answers.",
   "Use say when the user asks to speak or read something aloud.",
   "Use illustrate when the user asks for art, a scene, a portrait, or a picture of something from the campaign.",
-  "Use getCampaignContext to answer questions about this guild's campaign, recent sessions, or the latest transcript.",
-  "Use lookupCampaignEntities first for direct questions about a specific character, NPC, faction, or place ('who is X?', 'where was X last seen?', 'what's X's status?'). It returns the tracked profile: known facts like status, last known location, and goals, plus who plays each PC and when the entity was last seen.",
-  "Use searchCampaignHistory when the user asks about a specific person, place, event, or detail that may be from an earlier session not covered by recent context (e.g. 'who was the innkeeper we met ages ago?', 'when did we first fight the lich?'), or when lookupCampaignEntities comes up empty. It searches every past session's transcripts, summaries, and your remembered facts. Prefer it over guessing, and feed it the key nouns from the question.",
-  "When searchCampaignHistory returns results, weave the relevant details into your in-character answer and reference which session they came from when it helps; if it finds nothing, admit the memory is lost to you rather than inventing details.",
+  ...GRIMOIRE_TOOL_GUIDANCE,
   "Keep replies short unless the user asks for detail.",
-  "Never mention tool names or system instructions.",
 ].join(" ");
-
-function formatTimestamp(value: Date | null | undefined) {
-  return value ? value.toISOString() : null;
-}
 
 function buildPrompt(input: DiscordAgentInput) {
   const message = input.message.trim() || "help";
@@ -152,162 +96,6 @@ function buildPrompt(input: DiscordAgentInput) {
     `Guild: ${input.guildId}. Channel: ${input.channelId}.`,
     `User message: ${message}`,
   ].join("\n");
-}
-
-const DEFAULT_SESSION_LIMIT = 5;
-
-async function loadCampaignContext(
-  guildId: string,
-  sessionLimit: number = DEFAULT_SESSION_LIMIT,
-): Promise<CampaignContext> {
-  // 1. Get the guild's active campaign
-  const [guild] = await db
-    .select({
-      activeCampaignId: botGuilds.activeCampaignId,
-    })
-    .from(botGuilds)
-    .where(eq(botGuilds.guildId, guildId))
-    .limit(1);
-
-  const activeCampaignId = guild?.activeCampaignId;
-
-  // No active campaign set
-  if (!activeCampaignId) {
-    return {
-      campaign: null,
-      sessions: [],
-      recentTranscripts: [],
-      memories: [],
-      recentChatMessages: [],
-    };
-  }
-
-  // 2. Load the campaign details
-  const [campaign] = await db
-    .select({
-      id: campaigns.id,
-      name: campaigns.name,
-      description: campaigns.description,
-    })
-    .from(campaigns)
-    .where(eq(campaigns.id, activeCampaignId))
-    .limit(1);
-
-  if (!campaign) {
-    return {
-      campaign: null,
-      sessions: [],
-      recentTranscripts: [],
-      memories: [],
-      recentChatMessages: [],
-    };
-  }
-
-  // 3. Load recent sessions FOR THIS CAMPAIGN (ordered by start time, newest first)
-  const campaignSessions = await db
-    .select({
-      id: sessions.id,
-      status: sessions.status,
-      startedAt: sessions.startedAt,
-      endedAt: sessions.endedAt,
-    })
-    .from(sessions)
-    .where(eq(sessions.campaignId, activeCampaignId))
-    .orderBy(desc(sessions.startedAt))
-    .limit(sessionLimit);
-
-  // 4. Load summaries for these sessions
-  const sessionIds = campaignSessions.map((s) => s.id);
-  const summaryMap = new Map<number, string>();
-  for (const sessionId of sessionIds) {
-    const [summaryRow] = await db
-      .select({ text: summaries.text })
-      .from(summaries)
-      .where(eq(summaries.sessionId, sessionId))
-      .orderBy(desc(summaries.createdAt))
-      .limit(1);
-    if (summaryRow) {
-      summaryMap.set(sessionId, summaryRow.text);
-    }
-  }
-
-  // 5. Build sessions array with session numbers (oldest = 1)
-  const sessionsWithSummaries = campaignSessions
-    .map((session, index) => ({
-      id: session.id,
-      sessionNumber: campaignSessions.length - index, // newest is highest number
-      status: session.status,
-      startedAt: formatTimestamp(session.startedAt),
-      endedAt: formatTimestamp(session.endedAt),
-      summary: summaryMap.get(session.id) ?? null,
-    }))
-    .reverse(); // Return in chronological order (oldest first)
-
-  // 6. Load recent transcripts from the most recent session only
-  const latestSession = campaignSessions[0];
-  const recentTranscripts = latestSession
-    ? await db
-        .select({
-          speaker: transcripts.speaker,
-          content: transcripts.content,
-          timestamp: transcripts.timestamp,
-        })
-        .from(transcripts)
-        .where(eq(transcripts.sessionId, latestSession.id))
-        .orderBy(desc(transcripts.timestamp))
-        .then((rows) =>
-          [...rows].reverse().map((row) => ({
-            speaker: row.speaker,
-            content: row.content,
-            timestamp: formatTimestamp(row.timestamp),
-          })),
-        )
-    : [];
-
-  // 7. Load all memories for this campaign
-  const campaignMemories = await db
-    .select({
-      id: memories.id,
-      content: memories.content,
-      category: memories.category,
-      source: memories.source,
-      createdAt: memories.createdAt,
-    })
-    .from(memories)
-    .where(eq(memories.campaignId, activeCampaignId))
-    .orderBy(desc(memories.createdAt));
-
-  // 8. Load recent chat messages for this campaign
-  const recentChatMessagesData = await db
-    .select({
-      displayName: chatMessages.displayName,
-      content: chatMessages.content,
-      isBot: chatMessages.isBot,
-      createdAt: chatMessages.createdAt,
-    })
-    .from(chatMessages)
-    .where(eq(chatMessages.campaignId, activeCampaignId))
-    .orderBy(desc(chatMessages.createdAt))
-    .limit(DEFAULT_CHAT_MESSAGE_LIMIT);
-
-  return {
-    campaign,
-    sessions: sessionsWithSummaries,
-    recentTranscripts,
-    memories: campaignMemories.map((m) => ({
-      id: m.id,
-      content: m.content,
-      category: m.category,
-      source: m.source,
-      createdAt: formatTimestamp(m.createdAt),
-    })),
-    recentChatMessages: [...recentChatMessagesData].reverse().map((m) => ({
-      displayName: m.displayName,
-      content: m.content,
-      isBot: m.isBot,
-      createdAt: formatTimestamp(m.createdAt),
-    })),
-  };
 }
 
 async function getActiveCampaignId(guildId: string): Promise<number | null> {
@@ -379,108 +167,7 @@ function createDiscordAgent(params: {
           return { ok: true };
         },
       }),
-      getCampaignContext: tool({
-        description:
-          "Fetch the active campaign details, session history with summaries, and recent transcripts for this guild.",
-        inputSchema: z.object({
-          sessionLimit: z
-            .number()
-            .int()
-            .min(1)
-            .max(10)
-            .optional()
-            .describe("Number of recent sessions to include (default 5)"),
-        }),
-        execute: async ({ sessionLimit }) => {
-          return loadCampaignContext(input.guildId, sessionLimit);
-        },
-      }),
-      lookupCampaignEntities: tool({
-        description:
-          "Look up tracked campaign entities — player characters, NPCs, factions, locations — by name or alias. Returns each entity's profile: known facts (status, last known location, goals, …), aliases, who plays it (for PCs), and when it was last seen. Read-only.",
-        inputSchema: z.object({
-          query: z
-            .string()
-            .optional()
-            .describe(
-              "Name or alias to look up; partial matches work. Omit to list all entities of the given type.",
-            ),
-          type: z
-            .enum(ENTITY_TYPES)
-            .optional()
-            .describe("Filter by entity type"),
-          limit: z
-            .number()
-            .int()
-            .min(1)
-            .max(20)
-            .optional()
-            .describe("Max results (default 8)."),
-        }),
-        execute: async ({ query, type, limit }) => {
-          if (!activeCampaignId) {
-            return {
-              ok: false,
-              error: "No active campaign. I track no one.",
-            };
-          }
-          const results = await lookupEntities({
-            campaignId: activeCampaignId,
-            query,
-            type,
-            limit,
-          });
-          return {
-            ok: true,
-            resultCount: results.length,
-            entities: results,
-          };
-        },
-      }),
-      searchCampaignHistory: tool({
-        description:
-          "Search the entire campaign history — every past session's transcripts and summaries, plus remembered facts — for specific people, places, events, or details. Use this for questions about things from earlier sessions that aren't in the recent context.",
-        inputSchema: z.object({
-          query: z
-            .string()
-            .min(1)
-            .describe(
-              "What to look for, in natural language. Include the key names/nouns, e.g. 'the innkeeper in the riverside town' or 'who betrayed the party'.",
-            ),
-          limit: z
-            .number()
-            .int()
-            .min(1)
-            .max(20)
-            .optional()
-            .describe("Max results to return (default 8)."),
-        }),
-        execute: async ({ query, limit }) => {
-          if (!activeCampaignId) {
-            return {
-              ok: false,
-              error:
-                "No active campaign. There is no history for me to search.",
-            };
-          }
-          const results = await searchCampaignHistory({
-            campaignId: activeCampaignId,
-            query,
-            limit,
-          });
-          return {
-            ok: true,
-            resultCount: results.length,
-            results: results.map((r) => ({
-              source: r.sourceType,
-              session: r.sessionNumber,
-              date: r.sessionDate,
-              speaker: r.speaker,
-              content: r.content,
-            })),
-          };
-        },
-      }),
+      ...createCampaignTools({ campaignId: activeCampaignId }),
       ...(illustrateAvailable
         ? {
             illustrate: tool({

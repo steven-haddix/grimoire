@@ -10,12 +10,14 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
+    "db:seed": "bun run scripts/seed.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.4",
     "@ai-sdk/google": "^4.0.3",
     "@ai-sdk/openai": "^4.0.4",
+    "@ai-sdk/react": "^4.0.15",
     "@better-auth/drizzle-adapter": "^1.5.3",
     "@hookform/resolvers": "^5.2.2",
     "@neondatabase/serverless": "^1.0.2",

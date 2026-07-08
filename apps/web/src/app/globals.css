@@ -799,6 +799,130 @@ body {
 .page--narrow { max-width: 880px; }
 .page--wide { max-width: 1400px; }
 
+/* ─── ask grimoire chat surface ─── */
+.chat-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.chat-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.chat-thread {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 24px 152px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: chatFade 0.3s ease-out;
+}
+.chat-composer {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.chat-error {
+  border: 0.5px solid var(--rule);
+  background: var(--ink-2);
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.chat-clear {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--bone-mute);
+}
+.chat-clear:hover:not(:disabled) { color: var(--bone-dim); }
+.chat-clear:disabled { opacity: 0.6; cursor: default; }
+
+/* floating, solid input dock — conversation scrolls behind it */
+.chat-input-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 52px 24px 20px;
+  pointer-events: none;
+  animation: chatDockRise 0.28s ease-out;
+}
+.chat-input-dock::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--ink) 62%, transparent);
+  pointer-events: none;
+}
+.chat-input-dock__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 820px;
+  margin: 0 auto;
+  pointer-events: auto;
+  background: var(--ink);
+  border: 0.5px solid var(--rule);
+  padding: 12px;
+}
+
+/* empty landing — centered greeting + input */
+.chat-empty {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  text-align: center;
+}
+.chat-empty__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chat-empty__title { font-size: 56px; }
+.chat-empty__sub {
+  color: var(--bone-dim);
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.chat-empty__composer {
+  width: 100%;
+  max-width: 560px;
+}
+.chat-starters {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@keyframes chatFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes chatDockRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ─── prose-meets-scriptorium for markdown summaries ─── */
 .prose-grim {
   font-family: var(--body);
@@ -878,4 +1002,18 @@ body {
   .page { padding: 28px 20px 48px; }
   .gal { grid-template-columns: 1fr; }
   .login__title { font-size: 56px; }
+
+  /* nav stacks above content on mobile — let the chat flow instead of
+     pinning to a viewport that no longer starts at the top */
+  .chat-shell { height: auto; min-height: 100dvh; }
+  .chat-scroll { overflow-y: visible; }
+  .chat-thread { padding: 24px 16px 32px; }
+  .chat-empty { min-height: 60vh; }
+  .chat-input-dock {
+    position: static;
+    padding: 16px 16px 24px;
+    pointer-events: auto;
+    animation: none;
+  }
+  .chat-input-dock::before { display: none; }
 }

@@ -85,6 +85,13 @@
       "when": 1782961195181,
       "tag": "0011_petite_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783117422362,
+      "tag": "0012_wealthy_puff_adder",
+      "breakpoints": true
     }
   ]
 }
