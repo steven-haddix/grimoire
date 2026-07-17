@@ -114,7 +114,7 @@ export class MistralSttProvider implements SttProvider {
       const byteLen = pcmByteLength;
       pcmByteLength = 0;
 
-      const flushPromise = doFlush(chunks, byteLen).finally(() => {
+      const flushPromise = doFlush(chunks, byteLen).catch(() => {}).finally(() => {
         if (activeFlush === flushPromise) {
           activeFlush = null;
         }
