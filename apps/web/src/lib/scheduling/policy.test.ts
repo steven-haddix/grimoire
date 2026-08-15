@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  JOB_POLICIES,
   jobFailureDisposition,
+  jobPolicy,
   jobRetryDelayMs,
   MAX_JOB_ATTEMPTS,
 } from "./policy";
@@ -47,6 +49,19 @@ describe("scheduled job retry policy", () => {
     ).toEqual({
       status: "pending",
       retryAt: new Date("2026-08-12T20:15:00.000Z"),
+    });
+  });
+
+  test("summarize jobs lease longer than delivery jobs", () => {
+    expect(JOB_POLICIES.summarize_session.leaseDurationMs).toBeGreaterThan(
+      JOB_POLICIES.game_start_reminder.leaseDurationMs,
+    );
+  });
+
+  test("unknown job types fall back to a default dead-letter policy", () => {
+    expect(jobPolicy("mystery_job")).toEqual({
+      leaseDurationMs: JOB_POLICIES.session_stop_reminder.leaseDurationMs,
+      onExhaustedAttempts: "dead",
     });
   });
 });

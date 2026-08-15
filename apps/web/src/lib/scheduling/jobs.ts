@@ -1,17 +1,10 @@
 import { and, asc, eq, lte, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { campaignSchedules, scheduledJobs } from "@/db/schema";
-import { jobFailureDisposition } from "./policy";
-import { startReminderDedupeKey } from "./schedules";
-import { nextWeeklyOccurrence } from "./time";
+import { scheduledJobs } from "@/db/schema";
+import { jobCompletionHook } from "./completion-hooks";
+import { jobFailureDisposition, jobPolicy } from "./policy";
 
 export type ScheduledJob = typeof scheduledJobs.$inferSelect;
-
-// Summary generation can legitimately take several minutes under provider
-// load. A longer lease avoids paying for a duplicate model call while still
-// allowing recovery after a crashed worker.
-const DEFAULT_LEASE_DURATION_MS = 2 * 60_000;
-const SUMMARY_LEASE_DURATION_MS = 15 * 60_000;
 
 export async function claimDueJobs(input: {
   workerId: string;
@@ -43,10 +36,7 @@ export async function claimDueJobs(input: {
     const claimed: ScheduledJob[] = [];
     for (const candidate of candidates) {
       const leaseExpiresAt = new Date(
-        now.getTime() +
-          (candidate.type === "summarize_session"
-            ? SUMMARY_LEASE_DURATION_MS
-            : DEFAULT_LEASE_DURATION_MS),
+        now.getTime() + jobPolicy(candidate.type).leaseDurationMs,
       );
       const [updated] = await tx
         .update(scheduledJobs)
@@ -84,50 +74,8 @@ export async function completeScheduledJob(input: {
       return false;
     }
 
-    if (job.type === "game_start_reminder" && job.scheduleId) {
-      const [schedule] = await tx
-        .select()
-        .from(campaignSchedules)
-        .where(eq(campaignSchedules.id, job.scheduleId))
-        .limit(1)
-        .for("update");
-
-      if (schedule?.enabled) {
-        const occurrenceRaw = job.payload.occurrenceAt;
-        const occurrenceAt =
-          typeof occurrenceRaw === "string" &&
-          Number.isFinite(new Date(occurrenceRaw).getTime())
-            ? new Date(occurrenceRaw)
-            : job.runAt;
-        const after = new Date(Math.max(now.getTime(), occurrenceAt.getTime()));
-        const nextOccurrenceAt = nextWeeklyOccurrence({
-          weekday: schedule.weekday,
-          localTime: schedule.localTime,
-          timeZone: schedule.timeZone,
-          after,
-        });
-        const nextPayload = {
-          ...job.payload,
-          channelId: schedule.announcementChannelId,
-          occurrenceAt: nextOccurrenceAt.toISOString(),
-        };
-
-        await tx
-          .update(campaignSchedules)
-          .set({ nextOccurrenceAt, updatedAt: now })
-          .where(eq(campaignSchedules.id, schedule.id));
-        await tx
-          .insert(scheduledJobs)
-          .values({
-            type: "game_start_reminder",
-            scheduleId: schedule.id,
-            runAt: nextOccurrenceAt,
-            payload: nextPayload,
-            dedupeKey: startReminderDedupeKey(schedule.id, nextOccurrenceAt),
-          })
-          .onConflictDoNothing({ target: scheduledJobs.dedupeKey });
-      }
-    }
+    const hook = jobCompletionHook(job.type);
+    if (hook) await hook(tx, job, now);
 
     await tx
       .update(scheduledJobs)

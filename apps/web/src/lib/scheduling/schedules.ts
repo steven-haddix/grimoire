@@ -157,6 +157,62 @@ export async function removeGuildSchedules(guildId: string) {
   return removed.length > 0;
 }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type ScheduledJobRow = typeof scheduledJobs.$inferSelect;
+
+// Completion hook for game_start_reminder jobs. Runs inside the job's
+// completion transaction so an enabled schedule always has exactly one
+// upcoming occurrence enqueued.
+export async function scheduleNextWeeklyReminder(
+  tx: Tx,
+  job: ScheduledJobRow,
+  now: Date,
+) {
+  if (!job.scheduleId) return;
+
+  const [schedule] = await tx
+    .select()
+    .from(campaignSchedules)
+    .where(eq(campaignSchedules.id, job.scheduleId))
+    .limit(1)
+    .for("update");
+  if (!schedule?.enabled) return;
+
+  const occurrenceRaw = job.payload.occurrenceAt;
+  const occurrenceAt =
+    typeof occurrenceRaw === "string" &&
+    Number.isFinite(new Date(occurrenceRaw).getTime())
+      ? new Date(occurrenceRaw)
+      : job.runAt;
+  const after = new Date(Math.max(now.getTime(), occurrenceAt.getTime()));
+  const nextOccurrenceAt = nextWeeklyOccurrence({
+    weekday: schedule.weekday,
+    localTime: schedule.localTime,
+    timeZone: schedule.timeZone,
+    after,
+  });
+  const nextPayload = {
+    ...job.payload,
+    channelId: schedule.announcementChannelId,
+    occurrenceAt: nextOccurrenceAt.toISOString(),
+  };
+
+  await tx
+    .update(campaignSchedules)
+    .set({ nextOccurrenceAt, updatedAt: now })
+    .where(eq(campaignSchedules.id, schedule.id));
+  await tx
+    .insert(scheduledJobs)
+    .values({
+      type: "game_start_reminder",
+      scheduleId: schedule.id,
+      runAt: nextOccurrenceAt,
+      payload: nextPayload,
+      dedupeKey: startReminderDedupeKey(schedule.id, nextOccurrenceAt),
+    })
+    .onConflictDoNothing({ target: scheduledJobs.dedupeKey });
+}
+
 export async function removeCampaignSchedule(input: {
   campaignId: number;
   guildId: string;
