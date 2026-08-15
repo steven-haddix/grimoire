@@ -1,12 +1,12 @@
 # dnd-scribe
 
-A Bun monorepo for a Discord-based D&D scribe. The bot streams voice audio to Deepgram for transcription, while the web app stores transcripts in Neon and summarizes sessions with Vercel AI SDK.
+A Bun monorepo for a Discord-based D&D scribe. The bot streams voice audio to Deepgram for transcription, while the web app stores transcripts in a Coolify-hosted Postgres database and summarizes sessions with Vercel AI SDK.
 
 ## Structure
 
 ```
 /apps
-  /bot  - Discord bot (Fly.io)
+  /bot  - Discord bot (Coolify)
   /web  - Next.js admin + API (Vercel)
 ```
 
@@ -74,8 +74,12 @@ Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
 
 ## Deployment
 
-### Neon
-- Create a Neon project and copy `DATABASE_URL` into the web app env.
+### Postgres (Coolify)
+- Provision Postgres in Coolify and copy its connection string into the web
+  app's `DATABASE_URL`.
+- Apply generated migrations with `bun db:migrate`; `db:push` does not install
+  the pgvector extension and indexes used by campaign search.
+- Configure recurring database backups in Coolify.
 
 ### Vercel
 - Deploy `apps/web`.
@@ -83,29 +87,23 @@ Set env vars in `apps/bot/.env` (see `apps/bot/.env.example`):
   `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_BASEURL`, `DISCORD_CLIENT_ID`,
   `DISCORD_CLIENT_SECRET`, and `NEXT_PUBLIC_DISCORD_APP_ID`.
 
-### Fly.io
-- From `apps/bot`, run `fly launch` (do not deploy yet).
-- Set secrets:
+### Bot (Coolify)
+- Create a Dockerfile application rooted at `apps/bot`.
+- Configure the bot environment variables listed above. `NEXT_API_URL` must
+  include `/api`, and `BOT_SECRET` must match the web app.
+- Expose the configured `BOT_HTTP_PORT` (default `3001`) and use `/health` for
+  liveness. The response includes Discord and scheduler state.
+- Keep one bot container running continuously and enable automatic restart.
+  Game reminders are database-backed and processed by this service; no
+  Coolify scheduled task is required.
 
-```bash
-fly secrets set \
-  DISCORD_TOKEN=... \
-  DISCORD_APP_ID=... \
-  DEEPGRAM_API_KEY=... \
-  TTS_PROVIDER=deepgram \
-  TTS_VOICE=aura-asteria-en \
-  ELEVENLABS_API_KEY=... \
-  CARTESIA_API_KEY=... \
-  CARTESIA_BASE_URL=https://api.cartesia.ai \
-  NEXT_API_URL=https://your-vercel-app.com/api \
-  BOT_SECRET=...
-```
+## Weekly game reminders
 
-- Deploy:
-
-```bash
-fly deploy
-```
+Guild managers can say `@Grimoire my campaign is at 8:30pm EST on Wednesdays`
+or use `/campaign schedule set`. Grimoire posts a Start recording button at
+game time, a Stop & summarize reminder after three hours of recording, and
+forcibly ends recording at four hours. Schedule and deadline jobs live in
+Postgres, so restarts and deployments do not discard them.
 
 ## Notes
 

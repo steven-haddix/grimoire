@@ -55,6 +55,8 @@ export async function POST(req: Request) {
     .select({
       id: sessions.id,
       campaignId: sessions.campaignId,
+      status: sessions.status,
+      endedAt: sessions.endedAt,
     })
     .from(sessions)
     .where(eq(sessions.id, sessionId))
@@ -62,6 +64,38 @@ export async function POST(req: Request) {
 
   if (!session) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  }
+
+  const existingSummary = await db.query.summaries.findFirst({
+    where: eq(summaries.sessionId, sessionId),
+    columns: { text: true },
+  });
+  if (existingSummary) {
+    if (session.status !== "completed") {
+      await db
+        .update(sessions)
+        .set({ status: "completed", endedAt: session.endedAt ?? new Date() })
+        .where(eq(sessions.id, sessionId));
+    }
+    // A replay can mean the first attempt died before its post-response work
+    // ran; both calls are no-ops when the session is already indexed and
+    // extracted.
+    after(async () => {
+      await indexSession(sessionId);
+      await runExtraction(sessionId);
+    });
+    return NextResponse.json({
+      success: true,
+      summary: existingSummary.text,
+      existing: true,
+    });
+  }
+
+  if (session.status === "active") {
+    return NextResponse.json(
+      { error: "Stop the session before summarizing" },
+      { status: 409 },
+    );
   }
 
   const campaign = session.campaignId
@@ -82,8 +116,20 @@ export async function POST(req: Request) {
     .orderBy(asc(transcripts.timestamp));
 
   if (!lines.length) {
-    return NextResponse.json({ error: "Empty session" }, { status: 400 });
+    await db
+      .update(sessions)
+      .set({
+        status: "completed_empty",
+        endedAt: session.endedAt ?? new Date(),
+      })
+      .where(eq(sessions.id, sessionId));
+    return NextResponse.json({ success: true, summary: "", empty: true });
   }
+
+  await db
+    .update(sessions)
+    .set({ status: "summarizing" })
+    .where(eq(sessions.id, sessionId));
 
   const script = lines
     .map(
@@ -118,10 +164,13 @@ export async function POST(req: Request) {
     providerOptions: claudeProviderOptions(SUMMARY_EFFORT),
   });
 
-  await db.insert(summaries).values({ sessionId, text });
+  await db
+    .insert(summaries)
+    .values({ sessionId, text })
+    .onConflictDoNothing({ target: summaries.sessionId });
   await db
     .update(sessions)
-    .set({ status: "completed", endedAt: new Date() })
+    .set({ status: "completed", endedAt: session.endedAt ?? new Date() })
     .where(eq(sessions.id, sessionId));
 
   // Index this session's summary + transcripts for long-term campaign search,

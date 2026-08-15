@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "sessions_active_unique" ON "sessions" USING btree ("guild_id","channel_id") WHERE "sessions"."status" = 'active';

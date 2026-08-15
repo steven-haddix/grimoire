@@ -22,6 +22,16 @@ import {
 } from "@/lib/agents/grimoire-core";
 import { generateIllustration } from "@/lib/agents/image-providers";
 import { cache } from "@/lib/cache";
+import {
+  getCampaignSchedule,
+  removeCampaignSchedule,
+  setCampaignSchedule,
+} from "@/lib/scheduling/schedules";
+import {
+  discordTimestamp,
+  WEEKDAYS,
+  weekdayNumber,
+} from "@/lib/scheduling/time";
 import { indexMemory } from "@/lib/search/indexer";
 
 export type DiscordAgentInput = {
@@ -30,6 +40,7 @@ export type DiscordAgentInput = {
   userId: string;
   userName: string;
   userDisplayName: string;
+  canManageGuild: boolean;
   message: string;
 };
 
@@ -81,10 +92,13 @@ const instructions = [
   "- Also use rememberFact to store important facts you encounter: character names, NPC details, locations, relationships, lore.",
   "- Categories: 'character' for PCs/NPCs/traits, 'lore' for world/history/places, 'rule' for house rules/homebrew, 'meta' for scheduling/preferences, 'other' for misc.",
   "- Don't remember: jokes, casual chatter, questions, or speculation. When uncertain, don't remember - users can ask explicitly.",
+  "- A recurring game time is configuration, not a memory. Use the schedule tools for it and never rememberFact.",
   "- When you remember something, briefly acknowledge it in character ('I've inscribed that into my pages.').",
   "Use tools to respond; prefer reply for normal text answers.",
   "Use say when the user asks to speak or read something aloud.",
   "Use illustrate when the user asks for art, a scene, a portrait, or a picture of something from the campaign.",
+  "Use setGameSchedule when an authorized user states or changes a weekly campaign game time. Extract a 24-hour HH:mm wall-clock time and the stated timezone. Confirm the next occurrence with reply after the tool succeeds.",
+  "Use getGameSchedule or removeGameSchedule for schedule questions and removal requests.",
   ...GRIMOIRE_TOOL_GUIDANCE,
   "Keep replies short unless the user asks for detail.",
 ].join(" ");
@@ -94,6 +108,7 @@ function buildPrompt(input: DiscordAgentInput) {
   return [
     `Discord message from ${input.userDisplayName} (username: ${input.userName}, id: ${input.userId}).`,
     `Guild: ${input.guildId}. Channel: ${input.channelId}.`,
+    `Can manage guild: ${input.canManageGuild}.`,
     `User message: ${message}`,
   ].join("\n");
 }
@@ -301,6 +316,110 @@ function createDiscordAgent(params: {
             );
           }
           return { ok: true };
+        },
+      }),
+      setGameSchedule: tool({
+        description:
+          "Create or replace the active campaign's weekly Discord game reminder. Only available to a guild manager.",
+        inputSchema: z.object({
+          weekday: z.enum(WEEKDAYS),
+          localTime: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/)
+            .describe("24-hour local wall-clock time in HH:mm format"),
+          timeZone: z
+            .string()
+            .min(1)
+            .describe("IANA timezone or common US abbreviation such as EST"),
+        }),
+        execute: async ({ weekday, localTime, timeZone }) => {
+          if (!input.canManageGuild) {
+            return {
+              ok: false,
+              error:
+                "Manage Server permission is required to change schedules.",
+            };
+          }
+          if (!activeCampaignId) {
+            return { ok: false, error: "No active campaign is selected." };
+          }
+          try {
+            const schedule = await setCampaignSchedule({
+              campaignId: activeCampaignId,
+              guildId: input.guildId,
+              announcementChannelId: input.channelId,
+              weekday: weekdayNumber(weekday),
+              localTime,
+              timeZone,
+              createdByDiscordUserId: input.userId,
+            });
+            return {
+              ok: true,
+              weekday,
+              localTime: schedule.localTime,
+              timeZone: schedule.timeZone,
+              nextOccurrence: discordTimestamp(schedule.nextOccurrenceAt, "F"),
+              relativeNextOccurrence: discordTimestamp(
+                schedule.nextOccurrenceAt,
+                "R",
+              ),
+            };
+          } catch (error) {
+            return {
+              ok: false,
+              error:
+                error instanceof Error ? error.message : "Invalid schedule",
+            };
+          }
+        },
+      }),
+      getGameSchedule: tool({
+        description: "Read the active campaign's weekly game reminder.",
+        inputSchema: z.object({}),
+        execute: async () => {
+          if (!activeCampaignId) {
+            return { ok: false, error: "No active campaign is selected." };
+          }
+          const schedule = await getCampaignSchedule(activeCampaignId);
+          if (!schedule) return { ok: true, schedule: null };
+          return {
+            ok: true,
+            schedule: {
+              weekday: WEEKDAYS[schedule.weekday],
+              localTime: schedule.localTime,
+              timeZone: schedule.timeZone,
+              channel: `<#${schedule.announcementChannelId}>`,
+              nextOccurrence: discordTimestamp(schedule.nextOccurrenceAt, "F"),
+              relativeNextOccurrence: discordTimestamp(
+                schedule.nextOccurrenceAt,
+                "R",
+              ),
+            },
+          };
+        },
+      }),
+      removeGameSchedule: tool({
+        description:
+          "Remove the active campaign's weekly game reminder. Only available to a guild manager.",
+        inputSchema: z.object({}),
+        execute: async () => {
+          if (!input.canManageGuild) {
+            return {
+              ok: false,
+              error:
+                "Manage Server permission is required to change schedules.",
+            };
+          }
+          if (!activeCampaignId) {
+            return { ok: false, error: "No active campaign is selected." };
+          }
+          return {
+            ok: true,
+            removed: await removeCampaignSchedule({
+              campaignId: activeCampaignId,
+              guildId: input.guildId,
+            }),
+          };
         },
       }),
     },

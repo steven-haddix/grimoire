@@ -6,6 +6,7 @@ import { createCommandRouter } from "./discord/commands";
 import { registerDiscordEvents } from "./discord/events";
 import { registerSlashCommands } from "./discord/slash-commands";
 import { createVoiceManager } from "./discord/voice-manager";
+import { createScheduler } from "./scheduling/scheduler";
 import { startBotHttpServer } from "./server/http";
 import { createBotController } from "./services/bot-controller";
 import { SttService } from "./services/stt-service";
@@ -57,13 +58,46 @@ const transcription = new TranscriptionService(
   },
 );
 const voice = createVoiceManager({ client, tts, transcription });
-const controller = createBotController({ config, api, voice, transcription });
+const controller = createBotController({
+  config,
+  api,
+  voice,
+  transcription,
+  sendChannelMessage: async (channelId, content) => {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel?.isSendable()) {
+      throw new Error(`Discord channel ${channelId} is not sendable`);
+    }
+    await channel.send({ content });
+  },
+});
 const commands = createCommandRouter({ controller });
+const scheduler = createScheduler({ client, api, controller });
 
 registerDiscordEvents({ client, api, commands });
 registerSlashCommands(config).catch((err) => {
   console.error("Slash command registration failed", err);
 });
-startBotHttpServer({ config, client });
+const server = startBotHttpServer({ config, client, scheduler });
 
-client.login(config.discordToken);
+const shutdown = () => {
+  scheduler.stop();
+  void server.stop();
+  // The HTTP server keeps the event loop alive, so exit explicitly once the
+  // Discord client is down instead of waiting for Docker's SIGKILL.
+  Promise.resolve(client.destroy())
+    .catch(() => {})
+    .finally(() => process.exit(0));
+};
+process.once("SIGTERM", shutdown);
+process.once("SIGINT", shutdown);
+
+client
+  .login(config.discordToken)
+  .then(() => scheduler.start())
+  .catch((error) => {
+    console.error("Discord login failed", error);
+    // Exit so the container restart policy retries; the live HTTP server
+    // would otherwise keep a dead bot running and reporting healthy.
+    process.exit(1);
+  });

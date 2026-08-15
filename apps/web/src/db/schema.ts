@@ -12,6 +12,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   vector,
 } from "drizzle-orm/pg-core";
 
@@ -42,22 +43,39 @@ export const campaigns = pgTable("campaigns", {
     .$onUpdate(() => new Date()),
 });
 
-export const sessions = pgTable("sessions", {
-  id: serial("id").primaryKey(),
-  guildId: text("guild_id").notNull(),
-  channelId: text("channel_id").notNull(),
-  campaignId: integer("campaign_id").references(() => campaigns.id),
-  status: text("status").notNull().default("active"),
-  startedAt: timestamp("started_at").notNull().defaultNow(),
-  endedAt: timestamp("ended_at"),
-  // Live-search bookkeeping. `lastIndexedAt` debounces mid-session re-index
-  // runs (set when a run is claimed, before indexing starts).
-  // `lastIndexedTranscriptId` is the exact high-water mark of transcript rows
-  // captured by the last index run; lines above it are the "live tail" that
-  // search covers at query time without an index.
-  lastIndexedAt: timestamp("last_indexed_at"),
-  lastIndexedTranscriptId: integer("last_indexed_transcript_id"),
-});
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    // Voice capture and Discord reminder delivery are intentionally separate:
+    // a session is recorded from the voice channel but controlled from the text
+    // channel where it was started.
+    channelId: text("channel_id").notNull(),
+    textChannelId: text("text_channel_id"),
+    campaignId: integer("campaign_id").references(() => campaigns.id),
+    status: text("status").notNull().default("active"),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    endedAt: timestamp("ended_at"),
+    endedReason: text("ended_reason"),
+    stopReminderAt: timestamp("stop_reminder_at", { withTimezone: true }),
+    autoStopAt: timestamp("auto_stop_at", { withTimezone: true }),
+    // Live-search bookkeeping. `lastIndexedAt` debounces mid-session re-index
+    // runs (set when a run is claimed, before indexing starts).
+    // `lastIndexedTranscriptId` is the exact high-water mark of transcript rows
+    // captured by the last index run; lines above it are the "live tail" that
+    // search covers at query time without an index.
+    lastIndexedAt: timestamp("last_indexed_at"),
+    lastIndexedTranscriptId: integer("last_indexed_transcript_id"),
+  },
+  (table) => [
+    // One active recording per guild+voice channel: concurrent /grim start
+    // requests both pass the lookup, so the loser must fail at insert.
+    uniqueIndex("sessions_active_unique")
+      .on(table.guildId, table.channelId)
+      .where(sql`${table.status} = 'active'`),
+  ],
+);
 
 export const botGuilds = pgTable("bot_guilds", {
   guildId: text("guild_id").primaryKey(),
@@ -76,6 +94,70 @@ export const botGuilds = pgTable("bot_guilds", {
     .defaultNow(),
 });
 
+export const campaignSchedules = pgTable(
+  "campaign_schedules",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    guildId: text("guild_id").notNull(),
+    announcementChannelId: text("announcement_channel_id").notNull(),
+    weekday: integer("weekday").notNull(),
+    localTime: text("local_time").notNull(),
+    timeZone: text("time_zone").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    nextOccurrenceAt: timestamp("next_occurrence_at", {
+      withTimezone: true,
+    }).notNull(),
+    createdByDiscordUserId: text("created_by_discord_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("campaign_schedules_campaign_unique").on(table.campaignId),
+    index("campaign_schedules_next_occurrence_idx").on(
+      table.enabled,
+      table.nextOccurrenceAt,
+    ),
+  ],
+);
+
+export const scheduledJobs = pgTable(
+  "scheduled_jobs",
+  {
+    id: serial("id").primaryKey(),
+    type: text("type").notNull(),
+    scheduleId: integer("schedule_id").references(() => campaignSchedules.id, {
+      onDelete: "cascade",
+    }),
+    sessionId: integer("session_id").references(() => sessions.id, {
+      onDelete: "cascade",
+    }),
+    runAt: timestamp("run_at", { withTimezone: true }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    status: text("status").notNull().default("pending"),
+    leaseOwner: text("lease_owner"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("scheduled_jobs_dedupe_key_unique").on(table.dedupeKey),
+    index("scheduled_jobs_due_idx").on(table.status, table.runAt),
+    index("scheduled_jobs_session_idx").on(table.sessionId),
+  ],
+);
+
 export const transcripts = pgTable("transcripts", {
   id: serial("id").primaryKey(),
   sessionId: integer("session_id")
@@ -90,14 +172,18 @@ export const transcripts = pgTable("transcripts", {
   timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
 
-export const summaries = pgTable("summaries", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id")
-    .notNull()
-    .references(() => sessions.id, { onDelete: "cascade" }),
-  text: text("text").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const summaries = pgTable(
+  "summaries",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [unique("summaries_session_unique").on(table.sessionId)],
+);
 
 export const memories = pgTable("memories", {
   id: serial("id").primaryKey(),
@@ -407,6 +493,7 @@ export const searchableChunks = pgTable(
 
 export const campaignsRelations = relations(campaigns, ({ many }) => ({
   sessions: many(sessions),
+  schedules: many(campaignSchedules),
   memories: many(memories),
   chatMessages: many(chatMessages),
   webChatMessages: many(webChatMessages),
@@ -478,6 +565,29 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
   }),
   transcripts: many(transcripts),
   summaries: many(summaries),
+  scheduledJobs: many(scheduledJobs),
+}));
+
+export const campaignSchedulesRelations = relations(
+  campaignSchedules,
+  ({ one, many }) => ({
+    campaign: one(campaigns, {
+      fields: [campaignSchedules.campaignId],
+      references: [campaigns.id],
+    }),
+    jobs: many(scheduledJobs),
+  }),
+);
+
+export const scheduledJobsRelations = relations(scheduledJobs, ({ one }) => ({
+  schedule: one(campaignSchedules, {
+    fields: [scheduledJobs.scheduleId],
+    references: [campaignSchedules.id],
+  }),
+  session: one(sessions, {
+    fields: [scheduledJobs.sessionId],
+    references: [sessions.id],
+  }),
 }));
 
 export const botGuildsRelations = relations(botGuilds, ({ one }) => ({
