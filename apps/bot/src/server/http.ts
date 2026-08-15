@@ -1,5 +1,6 @@
 import type { Client } from "discord.js";
 import type { BotConfig } from "../config";
+import type { Scheduler } from "../scheduling/scheduler";
 
 async function isBotInstalled(client: Client, guildId: string) {
   try {
@@ -13,8 +14,9 @@ async function isBotInstalled(client: Client, guildId: string) {
 export function startBotHttpServer(params: {
   config: BotConfig;
   client: Client;
+  scheduler?: Scheduler;
 }) {
-  const { config, client } = params;
+  const { config, client, scheduler } = params;
 
   return Bun.serve({
     port: config.botHttpPort,
@@ -29,6 +31,7 @@ export function startBotHttpServer(params: {
           JSON.stringify({
             status: "ok",
             discordReady: client.isReady(),
+            scheduler: scheduler?.health() ?? null,
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );

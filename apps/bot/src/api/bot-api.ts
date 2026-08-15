@@ -16,6 +16,7 @@ export type AgentRequest = {
   userId: string;
   userName: string;
   userDisplayName: string;
+  canManageGuild: boolean;
   message: string;
 };
 
@@ -34,6 +35,28 @@ export type Campaign = {
   updatedAt: string;
 };
 
+export type CampaignSchedule = {
+  id: number;
+  campaignId: number;
+  guildId: string;
+  announcementChannelId: string;
+  weekday: number;
+  localTime: string;
+  timeZone: string;
+  enabled: boolean;
+  nextOccurrenceAt: string;
+};
+
+export type ScheduledJob = {
+  id: number;
+  type: string;
+  scheduleId: number | null;
+  sessionId: number | null;
+  runAt: string;
+  payload: Record<string, unknown>;
+  attemptCount: number;
+};
+
 export type BotApi = {
   upsertGuildPresence: (guild: GuildPresence) => Promise<void>;
   markGuildRemoved: (guildId: string) => Promise<void>;
@@ -41,7 +64,13 @@ export type BotApi = {
   startSession: (params: {
     guildId: string;
     channelId: string;
-  }) => Promise<{ sessionId: number; resumed: boolean }>;
+    textChannelId: string;
+  }) => Promise<{
+    sessionId: number;
+    resumed: boolean;
+    stopReminderAt: string;
+    autoStopAt: string;
+  }>;
   ingestTranscript: (params: {
     sessionId: number;
     speaker: string;
@@ -50,6 +79,48 @@ export type BotApi = {
     timestamp: string;
   }) => Promise<void>;
   summarizeSession: (sessionId: number) => Promise<void>;
+  stopSession: (params: {
+    sessionId: number;
+    reason:
+      | "manual_command"
+      | "stop_button"
+      | "max_duration"
+      | "expired_before_resume";
+  }) => Promise<{ stopped: boolean; status: string }>;
+  stopActiveSessionForGuild: (params: {
+    guildId: string;
+    reason: "manual_command" | "stop_button";
+  }) => Promise<{ stopped: boolean; status: string }>;
+  getSessionState: (sessionId: number) => Promise<{
+    session: {
+      id: number;
+      guildId: string;
+      textChannelId: string | null;
+      status: string;
+      autoStopAt: string | null;
+    };
+  }>;
+  claimScheduledJobs: (params: {
+    workerId: string;
+    limit?: number;
+  }) => Promise<ScheduledJob[]>;
+  completeScheduledJob: (jobId: number, workerId: string) => Promise<void>;
+  isStartReminderValid: (jobId: number, guildId: string) => Promise<boolean>;
+  failScheduledJob: (
+    jobId: number,
+    workerId: string,
+    error: string,
+  ) => Promise<void>;
+  setCampaignSchedule: (params: {
+    guildId: string;
+    announcementChannelId: string;
+    createdByDiscordUserId: string;
+    weekday: number;
+    localTime: string;
+    timeZone: string;
+  }) => Promise<CampaignSchedule>;
+  getCampaignSchedule: (guildId: string) => Promise<CampaignSchedule | null>;
+  removeCampaignSchedule: (guildId: string) => Promise<boolean>;
   runAgent: (input: AgentRequest) => Promise<AgentAction[]>;
   createCampaign: (params: {
     guildId: string;
@@ -144,17 +215,24 @@ export function createBotApi(config: BotConfig): BotApi {
     syncGuildPresence: async (guilds) => {
       await postBotJson("/bot/guilds/sync", { guilds }, "Guild presence sync");
     },
-    startSession: async ({ guildId, channelId }) => {
+    startSession: async ({ guildId, channelId, textChannelId }) => {
       const res = await postBotJson(
         "/session/start",
-        { guildId, channelId },
+        { guildId, channelId, textChannelId },
         "Session start",
       );
       const data = (await res.json()) as {
         sessionId: number;
         resumed?: boolean;
+        stopReminderAt: string;
+        autoStopAt: string;
       };
-      return { sessionId: data.sessionId, resumed: data.resumed ?? false };
+      return {
+        sessionId: data.sessionId,
+        resumed: data.resumed ?? false,
+        stopReminderAt: data.stopReminderAt,
+        autoStopAt: data.autoStopAt,
+      };
     },
     ingestTranscript: async ({
       sessionId,
@@ -171,6 +249,107 @@ export function createBotApi(config: BotConfig): BotApi {
     },
     summarizeSession: async (sessionId) => {
       await postBotJson("/summarize", { sessionId }, "Session summarize");
+    },
+    stopSession: async ({ sessionId, reason }) => {
+      const res = await postBotJson(
+        "/session/stop",
+        { sessionId, reason },
+        "Session stop",
+      );
+      return (await res.json()) as { stopped: boolean; status: string };
+    },
+    stopActiveSessionForGuild: async ({ guildId, reason }) => {
+      const res = await postBotJson(
+        "/session/stop",
+        { guildId, reason },
+        "Session stop",
+      );
+      return (await res.json()) as { stopped: boolean; status: string };
+    },
+    getSessionState: async (sessionId) => {
+      const res = await fetch(`${config.apiBase}/session/${sessionId}/state`, {
+        headers: { "x-bot-secret": config.botSecret },
+      });
+      if (!res.ok) {
+        throw new Error(`Session state failed (${res.status})`);
+      }
+      return (await res.json()) as {
+        session: {
+          id: number;
+          guildId: string;
+          textChannelId: string | null;
+          status: string;
+          autoStopAt: string | null;
+        };
+      };
+    },
+    claimScheduledJobs: async ({ workerId, limit }) => {
+      const res = await postBotJson(
+        "/bot/jobs/claim",
+        { workerId, limit },
+        "Scheduled job claim",
+      );
+      const data = (await res.json()) as { jobs: ScheduledJob[] };
+      return data.jobs;
+    },
+    completeScheduledJob: async (jobId, workerId) => {
+      await postBotJson(
+        `/bot/jobs/${jobId}/complete`,
+        { workerId },
+        "Scheduled job completion",
+      );
+    },
+    isStartReminderValid: async (jobId, guildId) => {
+      const res = await fetch(
+        `${config.apiBase}/bot/jobs/${jobId}/start-valid?guildId=${guildId}`,
+        { headers: { "x-bot-secret": config.botSecret } },
+      );
+      if (!res.ok) {
+        throw new Error(`Start reminder validation failed (${res.status})`);
+      }
+      const data = (await res.json()) as { valid: boolean };
+      return data.valid;
+    },
+    failScheduledJob: async (jobId, workerId, error) => {
+      await postBotJson(
+        `/bot/jobs/${jobId}/fail`,
+        { workerId, error },
+        "Scheduled job failure",
+      );
+    },
+    setCampaignSchedule: async (params) => {
+      const res = await postBotJson(
+        "/bot/schedules",
+        params,
+        "Set campaign schedule",
+      );
+      const data = (await res.json()) as { schedule: CampaignSchedule };
+      return data.schedule;
+    },
+    getCampaignSchedule: async (guildId) => {
+      const res = await fetch(
+        `${config.apiBase}/bot/schedules?guildId=${guildId}`,
+        { headers: { "x-bot-secret": config.botSecret } },
+      );
+      if (!res.ok)
+        throw new Error(`Get campaign schedule failed (${res.status})`);
+      const data = (await res.json()) as { schedule: CampaignSchedule | null };
+      return data.schedule;
+    },
+    removeCampaignSchedule: async (guildId) => {
+      const res = await fetch(`${config.apiBase}/bot/schedules`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-bot-secret": config.botSecret,
+        },
+        body: JSON.stringify({ guildId }),
+      });
+      if (!res.ok) {
+        throw new Error(`Remove campaign schedule failed (${res.status})`);
+      }
+      const data = (await res.json()) as { removed: boolean };
+      return data.removed;
     },
     runAgent: async (input) => {
       const res = await postBotJson("/agent/discord", input, "Agent request");

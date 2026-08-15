@@ -22,6 +22,7 @@ function parseDiscordAgentPayload(value: unknown): DiscordAgentInput | null {
       ? value.userDisplayName.trim()
       : "";
   const message = typeof value.message === "string" ? value.message.trim() : "";
+  const canManageGuild = value.canManageGuild === true;
 
   if (!guildId || !channelId || !userId || !userName) return null;
 
@@ -31,6 +32,7 @@ function parseDiscordAgentPayload(value: unknown): DiscordAgentInput | null {
     userId,
     userName,
     userDisplayName,
+    canManageGuild,
     message,
   };
 }

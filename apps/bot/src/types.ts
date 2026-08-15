@@ -8,6 +8,7 @@ export type CommandContext = {
   userId: string;
   userName: string;
   userDisplayName: string;
+  canManageGuild: boolean;
   voiceChannelId?: string;
   reply: ReplyFn;
   replyWithImage: (image: {
@@ -20,14 +21,22 @@ export type CommandContext = {
 export type CommandIntent =
   | { type: "help" }
   | { type: "start" }
-  | { type: "stop" }
+  | { type: "stop"; reason?: "manual_command" | "stop_button" }
   | { type: "recap" }
   | { type: "say"; text: string; voiceOverride?: string }
   | { type: "agent"; message: string }
   | { type: "scene"; prompt: string }
   | { type: "campaign_create"; name: string; description?: string }
   | { type: "campaign_list" }
-  | { type: "campaign_select"; name: string };
+  | { type: "campaign_select"; name: string }
+  | {
+      type: "schedule_set";
+      weekday: number;
+      localTime: string;
+      timeZone: string;
+    }
+  | { type: "schedule_show" }
+  | { type: "schedule_remove" };
 
 export type TranscriptInput = {
   sessionId: number;

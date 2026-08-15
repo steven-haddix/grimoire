@@ -1,7 +1,13 @@
+import { eq } from "drizzle-orm";
 import { after, NextResponse } from "next/server";
 import { db } from "@/db";
-import { transcripts } from "@/db/schema";
+import { sessions, transcripts } from "@/db/schema";
 import { maybeIndexSession } from "@/lib/search/indexer";
+
+// The bot's auto-stop fires exactly at autoStopAt and then flushes the last
+// Deepgram finals, whose ingest POSTs arrive after the deadline; without a
+// grace window the session's closing utterances would be rejected.
+const AUTO_STOP_INGEST_GRACE_MS = 5 * 60_000;
 
 type IngestPayload = {
   sessionId: number;
@@ -86,6 +92,22 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Missing sessionId, speaker, or text" },
       { status: 400 },
+    );
+  }
+
+  const session = await db.query.sessions.findFirst({
+    where: eq(sessions.id, payload.sessionId),
+    columns: { status: true, autoStopAt: true },
+  });
+  if (
+    !session ||
+    session.status !== "active" ||
+    (session.autoStopAt &&
+      session.autoStopAt.getTime() + AUTO_STOP_INGEST_GRACE_MS <= Date.now())
+  ) {
+    return NextResponse.json(
+      { error: "Session is not active" },
+      { status: 409 },
     );
   }
 

@@ -81,6 +81,51 @@ export function buildGrimCommands() {
               .setDescription("Campaign name")
               .setRequired(true),
           ),
+      )
+      .addSubcommandGroup((group) =>
+        group
+          .setName("schedule")
+          .setDescription("Manage the active campaign's game reminders")
+          .addSubcommand((sub) =>
+            sub
+              .setName("set")
+              .setDescription("Schedule a weekly game reminder")
+              .addIntegerOption((opt) =>
+                opt
+                  .setName("weekday")
+                  .setDescription("Day of the week")
+                  .setRequired(true)
+                  .addChoices(
+                    { name: "Sunday", value: 0 },
+                    { name: "Monday", value: 1 },
+                    { name: "Tuesday", value: 2 },
+                    { name: "Wednesday", value: 3 },
+                    { name: "Thursday", value: 4 },
+                    { name: "Friday", value: 5 },
+                    { name: "Saturday", value: 6 },
+                  ),
+              )
+              .addStringOption((opt) =>
+                opt
+                  .setName("time")
+                  .setDescription("Local time in 24-hour HH:mm format")
+                  .setRequired(true),
+              )
+              .addStringOption((opt) =>
+                opt
+                  .setName("timezone")
+                  .setDescription("Timezone, e.g. EST or America/New_York")
+                  .setRequired(true),
+              ),
+          )
+          .addSubcommand((sub) =>
+            sub.setName("show").setDescription("Show the next game reminder"),
+          )
+          .addSubcommand((sub) =>
+            sub
+              .setName("remove")
+              .setDescription("Remove the weekly game reminder"),
+          ),
       ),
   ].map((command) => command.toJSON());
 }

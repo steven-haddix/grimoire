@@ -2,15 +2,15 @@
 
 This repo is a Bun monorepo for a Discord-based D&D “scribe”:
 - A Discord bot joins a voice channel, streams Opus audio to Deepgram Live, and receives transcribed text.
-- A Next.js web app exposes API routes that store transcripts in Neon (Postgres via Drizzle) and generate a session recap via Vercel AI SDK.
+- A Next.js web app exposes API routes that store transcripts in Coolify-hosted Postgres via Drizzle and generate a session recap via Vercel AI SDK.
 
 ## How the system works (end-to-end)
 
-1. User types `!scribe start` in a Discord server while connected to a voice channel.
+1. User runs `/grim start` in a Discord server while connected to a voice channel.
 2. Bot joins voice, calls the web API to create a DB session record.
 3. For each speaking user, the bot opens a Deepgram Live connection and forwards Opus audio frames.
 4. When Deepgram emits a *final* transcript chunk, the bot POSTs it to the web API for persistence.
-5. User types `!scribe stop`; bot disconnects and triggers the web API to summarize the session.
+5. User runs `/grim stop`; bot disconnects and queues the web API to summarize the session.
 
 The “source of truth” is the database in `apps/web`:
 - `sessions`: lifecycle/status for each recording session
@@ -21,7 +21,7 @@ The “source of truth” is the database in `apps/web`:
 ## Repo layout
 
 - `package.json`: Bun workspaces + top-level scripts (preferred entrypoints)
-- `apps/bot/`: Discord bot (Bun runtime; deploy target: Fly.io)
+- `apps/bot/`: Discord bot (Bun runtime; deploy target: Coolify)
   - `apps/bot/src/index.ts`: bot commands, voice capture, Deepgram streaming, API calls
 - `apps/web/`: Next.js app + API (deploy target: Vercel)
   - `apps/web/src/app/api/session/start/route.ts`: creates a session row
@@ -67,8 +67,11 @@ Do not weaken or remove this check. If you change the auth mechanism, update:
 All routes expect `x-bot-secret`.
 
 - `POST /api/session/start`
-  - body: `{ guildId: string, channelId: string }`
-  - response: `{ sessionId: number }`
+  - body: `{ guildId: string, channelId: string, textChannelId: string }`
+  - response: `{ sessionId: number, resumed: boolean, stopReminderAt: string, autoStopAt: string }`
+- `POST /api/session/stop`
+  - body: `{ sessionId: number, reason: "manual_command"|"stop_button"|"max_duration"|"expired_before_resume" }`
+  - response: `{ success: true, stopped: boolean, status: string }`
 - `POST /api/ingest`
   - body: `{ sessionId: number, speaker: string, speakerUserId?: string, text: string, timestamp?: string|number }`
   - response: `{ ok: true }`
@@ -90,6 +93,19 @@ Preferred commands from repo root:
 - `bun db:studio` (open Drizzle Studio)
 
 Avoid manual edits inside `apps/web/drizzle/` unless you are intentionally fixing a broken migration.
+
+## Game scheduling and recording deadlines
+
+Weekly schedules live in `campaign_schedules`; durable reminder, auto-stop,
+and summary work lives in `scheduled_jobs`. The always-running Coolify bot
+polls authenticated job APIs and leases due rows transactionally. Keep job
+handlers idempotent: deployments may overlap and expired leases are retried.
+
+Recording deadlines are measured from the actual `sessions.started_at`, not
+the scheduled game time. The bot reminds at three hours and must stop at four.
+The local deadline timer is backed by the durable `session_auto_stop` job so a
+container restart cannot remove the safety limit. Store recurrence timezones
+as IANA names (for example `America/New_York`), never fixed offsets.
 
 ## LLM text generation (Vercel AI SDK)
 
@@ -178,8 +194,8 @@ into `players`, `entities`, `entity_aliases`, `entity_facts`, and
 ## Deployment pointers (so you don’t design the wrong thing)
 
 - `apps/web` is intended for Vercel (Next.js app router + server routes).
-- `apps/bot` is intended for Fly.io (see `apps/bot/fly.toml` and `apps/bot/Dockerfile`).
-- Database is Neon Postgres via `DATABASE_URL`; avoid introducing another DB/storage layer unless explicitly requested.
+- `apps/bot` is an always-running Docker application on Coolify (see `apps/bot/Dockerfile`).
+- Database is Coolify-hosted Postgres via `DATABASE_URL`; avoid introducing another DB/storage layer unless explicitly requested.
 
 ## Quick quality checks before you finish
 

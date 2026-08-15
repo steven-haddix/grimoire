@@ -92,6 +92,20 @@
       "when": 1783117422362,
       "tag": "0012_wealthy_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786587768574,
+      "tag": "0013_chubby_korvac",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786591380050,
+      "tag": "0014_soft_ikaris",
+      "breakpoints": true
     }
   ]
 }

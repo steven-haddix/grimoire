@@ -1,10 +1,11 @@
 import type {
+  ButtonInteraction,
   ChatInputCommandInteraction,
   GuildMember,
   Interaction,
   Message,
 } from "discord.js";
-import { MessageFlags } from "discord.js";
+import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import type { BotController } from "../services/bot-controller";
 import type { CommandContext, CommandIntent } from "../types";
 import { splitMessage } from "./utils";
@@ -25,6 +26,8 @@ export function createCommandRouter(params: {
     userId: msg.author.id,
     userName: msg.author.username,
     userDisplayName: msg.member?.displayName ?? msg.author.username,
+    canManageGuild:
+      msg.member?.permissions.has(PermissionFlagsBits.ManageGuild) ?? false,
     voiceChannelId: msg.member?.voice.channel?.id ?? undefined,
     reply: async (content) => {
       const chunks = splitMessage(content);
@@ -41,7 +44,7 @@ export function createCommandRouter(params: {
   });
 
   const buildInteractionContext = (
-    interaction: ChatInputCommandInteraction,
+    interaction: ChatInputCommandInteraction | ButtonInteraction,
     replyStrategy: "edit" | "followUp",
   ): CommandContext => {
     const member =
@@ -55,6 +58,9 @@ export function createCommandRouter(params: {
       userId: interaction.user.id,
       userName: interaction.user.username,
       userDisplayName: member?.displayName ?? interaction.user.username,
+      canManageGuild:
+        interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ??
+        false,
       voiceChannelId: member?.voice.channelId ?? undefined,
       reply: async (content) => {
         const chunks = splitMessage(content);
@@ -105,8 +111,32 @@ export function createCommandRouter(params: {
   };
 
   const handleInteraction = async (interaction: Interaction) => {
-    if (!interaction.isChatInputCommand()) return;
     if (!interaction.inGuild()) return;
+
+    if (interaction.isButton()) {
+      const startMatch = /^grim:start:(\d+)$/.exec(interaction.customId);
+      const stopMatch = /^grim:stop:(\d+)$/.exec(interaction.customId);
+      if (!startMatch && !stopMatch) return;
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const ctx = buildInteractionContext(interaction, "edit");
+      if (startMatch) {
+        await controller.handleStartReminder(Number(startMatch[1]), ctx);
+        return;
+      }
+
+      const sessionId = Number(stopMatch?.[1]);
+      await controller.stopSessionById({
+        guildId: ctx.guildId,
+        channelId: ctx.channelId,
+        sessionId,
+        reason: "stop_button",
+        reply: ctx.reply,
+      });
+      return;
+    }
+
+    if (!interaction.isChatInputCommand()) return;
 
     let intent: CommandIntent | null = null;
 
@@ -129,9 +159,21 @@ export function createCommandRouter(params: {
         intent = { type: "scene", prompt };
       }
     } else if (interaction.commandName === "campaign") {
+      const group = interaction.options.getSubcommandGroup(false);
       const sub = interaction.options.getSubcommand();
 
-      if (sub === "create") {
+      if (group === "schedule" && sub === "set") {
+        intent = {
+          type: "schedule_set",
+          weekday: interaction.options.getInteger("weekday", true),
+          localTime: interaction.options.getString("time", true),
+          timeZone: interaction.options.getString("timezone", true),
+        };
+      } else if (group === "schedule" && sub === "show") {
+        intent = { type: "schedule_show" };
+      } else if (group === "schedule" && sub === "remove") {
+        intent = { type: "schedule_remove" };
+      } else if (sub === "create") {
         const name = interaction.options.getString("name", true);
         const description =
           interaction.options.getString("description") ?? undefined;

@@ -28,6 +28,6 @@ COPY package.json personas.json ./
 COPY src ./src
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -sf http://localhost:3001/health || exit 1
+  CMD curl -sf "http://localhost:${BOT_HTTP_PORT:-${PORT:-3001}}/health" || exit 1
 
 CMD ["bun", "src/index.ts"]
