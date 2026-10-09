@@ -8,12 +8,12 @@ import { type AnthropicProviderOptions, anthropic } from "@ai-sdk/anthropic";
  */
 
 /** Claude model powering text generation across the app. */
-export const CLAUDE_MODEL_ID = "claude-sonnet-5";
+export const CLAUDE_MODEL_ID = "claude-sonnet-5-5";
 
 export const claudeModel = anthropic(CLAUDE_MODEL_ID);
 
 /**
- * Reasoning effort for a Claude request. Sonnet 5 runs adaptive thinking (it
+ * Reasoning effort for a Claude request. Sonnet 5.5 runs adaptive thinking (it
  * decides how much to reason per request); `effort` tunes that depth and the
  * overall token spend. Higher = more thorough but slower and pricier.
  */
@@ -43,8 +43,9 @@ export function resolveClaudeEffort(
 
 /**
  * Build Vercel AI SDK provider options for a Claude request at the given effort.
- * Adaptive thinking is enabled explicitly; the deprecated `thinking.budgetTokens`
- * param is intentionally omitted because Sonnet 5 rejects it.
+ * Adaptive thinking is enabled explicitly; `thinking.budgetTokens` and
+ * `thinking.type: "disabled"` are intentionally omitted because Sonnet 5.5
+ * rejects both — lower `effort` instead.
  */
 export function claudeProviderOptions(effort: ClaudeEffort) {
   // `satisfies` (not an annotation) validates against the provider type while
@@ -53,6 +54,11 @@ export function claudeProviderOptions(effort: ClaudeEffort) {
   const anthropic = {
     thinking: { type: "adaptive" },
     effort,
+    // Pin native structured output (`output_config.format`). The provider's
+    // fallback emulates it with a forced `tool_choice`, which Sonnet 5.5
+    // rejects with a 400 — this keeps `Output.object` callers working even if
+    // the provider stops recognizing the model id.
+    structuredOutputMode: "outputFormat",
   } satisfies AnthropicProviderOptions;
   return { anthropic };
 }

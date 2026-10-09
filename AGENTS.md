@@ -93,13 +93,19 @@ Avoid manual edits inside `apps/web/drizzle/` unless you are intentionally fixin
 
 ## LLM text generation (Vercel AI SDK)
 
-Text generation runs through the Vercel AI SDK on **Claude Sonnet 5** (`@ai-sdk/anthropic`):
+Text generation runs through the Vercel AI SDK on **Claude Sonnet 5.5** (`claude-sonnet-5-5`, `@ai-sdk/anthropic`):
 - The Discord agent (`apps/web/src/lib/agents/discord-agent.ts`) uses a `ToolLoopAgent`.
 - Session summarization (`apps/web/src/app/api/summarize/route.ts`) uses `generateText`.
 
-Shared model + provider config lives in `apps/web/src/lib/agents/claude.ts`. Sonnet 5
-runs adaptive thinking; reasoning depth is tuned via `effort` (`AGENT_EFFORT` defaults to
-`medium`, `SUMMARY_EFFORT` to `high`). Do NOT set `thinking.budgetTokens` — Sonnet 5 rejects it.
+Shared model + provider config lives in `apps/web/src/lib/agents/claude.ts`; the model id is a
+constant there, not an env var. Sonnet 5.5 runs adaptive thinking; reasoning depth is tuned via
+`effort` (`AGENT_EFFORT` defaults to `medium`, `SUMMARY_EFFORT` and `EXTRACTION_EFFORT` to `high`).
+Sonnet 5.5 returns a 400 for any of these:
+- `thinking.budgetTokens` or `thinking.type: "disabled"` (lower `effort` instead)
+- forced `toolChoice` (`"required"` or a named tool); structured output stays on native
+  `output_config.format` via `structuredOutputMode: "outputFormat"`
+- replayed thinking blocks after the earlier history was edited. Keep agent histories
+  append-only, or strip reasoning parts first, as `/api/chat` does.
 Requires `ANTHROPIC_API_KEY`. Image generation still uses `@ai-sdk/google` / `@ai-sdk/openai`.
 
 If you switch models/providers, update `apps/web/src/lib/agents/claude.ts`, env var usage,
