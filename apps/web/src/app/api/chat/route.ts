@@ -5,6 +5,7 @@ import { webChatMessages } from "@/db/schema";
 import { createWebChatAgent } from "@/lib/agents/web-chat-agent";
 import {
   extractMessageText,
+  stripReasoningParts,
   WEB_CHAT_CONTEXT_LIMIT,
   WEB_CHAT_INPUT_MAX_CHARS,
 } from "@/lib/agents/web-chat-messages";
@@ -48,9 +49,9 @@ export async function POST(req: Request) {
     throw error;
   }
 
-  const uiMessages = body.messages.slice(
-    -WEB_CHAT_CONTEXT_LIMIT,
-  ) as UIMessage[];
+  const uiMessages = stripReasoningParts(
+    body.messages.slice(-WEB_CHAT_CONTEXT_LIMIT) as UIMessage[],
+  );
 
   // Persist the incoming user message (not on regenerate, which re-sends a
   // message that is already stored). Best-effort — a failed write never

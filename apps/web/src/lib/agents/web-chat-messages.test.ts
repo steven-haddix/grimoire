@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { UIMessage } from "ai";
-import { extractMessageText, rowsToUIMessages } from "./web-chat-messages";
+import {
+  extractMessageText,
+  rowsToUIMessages,
+  stripReasoningParts,
+} from "./web-chat-messages";
 
 describe("rowsToUIMessages", () => {
   test("converts rows to single-text-part UIMessages with stable ids", () => {
@@ -70,5 +74,47 @@ describe("extractMessageText", () => {
   test("returns empty string when there is no text", () => {
     const message: UIMessage = { id: "m3", role: "assistant", parts: [] };
     expect(extractMessageText(message)).toBe("");
+  });
+});
+
+describe("stripReasoningParts", () => {
+  test("drops reasoning parts and keeps everything else in order", () => {
+    const messages = [
+      { id: "u1", role: "user", parts: [{ type: "text", text: "Who?" }] },
+      {
+        id: "a1",
+        role: "assistant",
+        parts: [
+          { type: "step-start" },
+          { type: "reasoning", text: "", state: "done" },
+          {
+            type: "tool-searchCampaignHistory",
+            toolCallId: "t1",
+            state: "output-available",
+            input: { query: "innkeeper" },
+            output: { ok: true },
+          },
+          { type: "reasoning", text: "", state: "done" },
+          { type: "text", text: "Marta." },
+        ],
+      },
+    ] as unknown as UIMessage[];
+    const stripped = stripReasoningParts(messages);
+    expect(stripped[0]).toEqual(messages[0]);
+    expect(stripped[1]?.parts.map((p) => p.type)).toEqual([
+      "step-start",
+      "tool-searchCampaignHistory",
+      "text",
+    ]);
+  });
+
+  test("does not mutate the input", () => {
+    const message = {
+      id: "a1",
+      role: "assistant",
+      parts: [{ type: "reasoning", text: "", state: "done" }],
+    } as unknown as UIMessage;
+    stripReasoningParts([message]);
+    expect(message.parts).toHaveLength(1);
   });
 });

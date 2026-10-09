@@ -1,4 +1,4 @@
-import { isTextUIPart, type UIMessage } from "ai";
+import { isReasoningUIPart, isTextUIPart, type UIMessage } from "ai";
 
 /**
  * Pure helpers for the web "Ask Grimoire" chat: converting persisted
@@ -41,4 +41,17 @@ export function extractMessageText(message: UIMessage): string {
     .map((part) => part.text)
     .join("\n\n")
     .trim();
+}
+
+/**
+ * Drop reasoning parts from client-sent history before it reaches the model.
+ * Claude binds each thinking block to the exact conversation prefix that
+ * produced it, and the context window slice trims that prefix — replaying the
+ * old blocks would be rejected. Persisted history is text-only anyway.
+ */
+export function stripReasoningParts(messages: UIMessage[]): UIMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    parts: message.parts.filter((part) => !isReasoningUIPart(part)),
+  }));
 }
